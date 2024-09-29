@@ -79,6 +79,7 @@ add_library(pico-radio STATIC
         src/tcpclient.cpp
         src/textstream.cpp
         src/udpsocket.cpp
+        src/wsserver.cpp
         )
 
 target_include_directories(pico-radio PRIVATE
