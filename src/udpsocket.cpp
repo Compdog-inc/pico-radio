@@ -1,4 +1,5 @@
 #include <pico/stdlib.h>
+#include <pico/cyw43_arch.h>
 #include <lwip/netif.h>
 #include <lwip/ip4_addr.h>
 #include <lwip/udp.h>
@@ -8,22 +9,64 @@
 
 using namespace std::literals;
 
-static int udp_send_buffer(struct udp_pcb **udp, const void *buf, size_t len, const ip_addr_t *addr, uint16_t port)
+Datagram::Datagram(void *data, uint16_t length, uint16_t port) : data(data),
+                                                                 length(length),
+                                                                 address(nullptr),
+                                                                 port(port)
 {
-    if (len > 0xffff)
+}
+
+Datagram::Datagram(const void *data, uint16_t length, uint16_t port) : data(data),
+                                                                       length(length),
+                                                                       address(nullptr),
+                                                                       port(port)
+{
+}
+
+Datagram::Datagram(void *data, uint16_t length, const ip_addr_t *address, uint16_t port) : data(data),
+                                                                                           length(length),
+                                                                                           address(address),
+                                                                                           port(port)
+{
+}
+
+Datagram::Datagram(const void *data, uint16_t length, const ip_addr_t *address, uint16_t port) : data(data),
+                                                                                                 length(length),
+                                                                                                 address(address),
+                                                                                                 port(port)
+{
+}
+
+Datagram Datagram::asReply(void *data, uint16_t length)
+{
+    return Datagram(data, length, this->address, this->port);
+}
+
+Datagram Datagram::asReply(const void *data, uint16_t length)
+{
+    return Datagram(data, length, this->address, this->port);
+}
+
+/// @brief
+/// @param udp
+/// @param datagram
+/// @return The number of bytes actually sent
+static int udp_send_datagram(struct udp_pcb **udp, Datagram *datagram)
+{
+    if (datagram->length > 0xffff)
     {
-        len = 0xffff;
+        datagram->length = 0xffff;
     }
 
-    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
+    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, datagram->length, PBUF_RAM);
     if (p == NULL)
     {
         return -ENOMEM;
     }
 
-    memcpy(p->payload, buf, len);
+    memcpy(p->payload, datagram->data, datagram->length);
 
-    err_t err = udp_sendto(*udp, p, addr, port);
+    err_t err = udp_sendto(*udp, p, datagram->address, datagram->port);
 
     pbuf_free(p);
 
@@ -32,23 +75,25 @@ static int udp_send_buffer(struct udp_pcb **udp, const void *buf, size_t len, co
         return err;
     }
 
-    return len;
+    return datagram->length;
 }
 
 /**
- * @brief This function is called when an UDP datagrm has been received on the port UDP_PORT.
- * @param arg user supplied argument (udp_pcb.recv_arg)
+ * @brief This function is called when an UDP datagrm has been received.
+ * @param arg The UdpSocket instance that received this
  * @param pcb the udp_pcb which received data
  * @param p the packet buffer that was received
  * @param addr the remote IP address from which the packet was received
  * @param port the remote port from which the packet was received
- * @retval None
  */
 void udp_receive_callback(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)
 {
     UdpSocket *sock = (UdpSocket *)arg;
-    auto msg = "howdy!\n"sv;
-    udp_send_buffer(&sock->udp, msg.data(), msg.length(), addr, port);
+    if (sock->receiveCallback != nullptr)
+    {
+        Datagram datagram(p->payload, p->len, addr, port);
+        sock->receiveCallback(sock, &datagram);
+    }
 }
 
 UdpSocket::UdpSocket(int port)
@@ -99,4 +144,26 @@ void UdpSocket::disconnect()
 bool UdpSocket::isOpen()
 {
     return udp != nullptr;
+}
+
+bool UdpSocket::broadcast(Datagram *datagram)
+{
+    assert(udp != nullptr);
+
+    u32_t netmask = netif_ip4_netmask(cyw43_state.netif)->addr;
+    u32_t ip = netif_ip4_addr(cyw43_state.netif)->addr;
+    u32_t broadcast = ip | (~netmask); // set all masked bits to 1
+
+    ip4_addr_t addr = {};
+    addr.addr = broadcast;
+    datagram->address = &addr;
+
+    return udp_send_datagram(&udp, datagram) == datagram->length;
+}
+
+bool UdpSocket::sendDatagram(Datagram *datagram)
+{
+    assert(udp != nullptr);
+
+    return udp_send_datagram(&udp, datagram) == datagram->length;
 }
