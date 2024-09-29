@@ -118,6 +118,24 @@ UdpSocket::UdpSocket(ip4_addr_t addr, int port)
     }
 }
 
+UdpSocket::UdpSocket(ip4_addr_t addr, int localPort, int remotePort)
+{
+    udp = udp_new();
+    udp_recv(udp, udp_receive_callback, (void *)this);
+
+    if (udp_bind(udp, IP_ANY_TYPE, localPort) != ERR_OK)
+    {
+        udp_remove(udp);
+        udp = nullptr;
+    }
+
+    if (udp_connect(udp, &addr, remotePort) != ERR_OK)
+    {
+        udp_remove(udp);
+        udp = nullptr;
+    }
+}
+
 UdpSocket::~UdpSocket()
 {
     if (udp != nullptr)
