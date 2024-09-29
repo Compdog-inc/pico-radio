@@ -5,9 +5,10 @@
 #include <lwip/sockets.h>
 #include "udpsocket.h"
 #include <string>
+
 using namespace std::literals;
 
-static int dhcp_socket_sendto(struct udp_pcb **udp, struct netif *nif, const void *buf, size_t len, uint32_t ip, uint16_t port)
+static int udp_send_buffer(struct udp_pcb **udp, const void *buf, size_t len, const ip_addr_t *addr, uint16_t port)
 {
     if (len > 0xffff)
     {
@@ -22,17 +23,7 @@ static int dhcp_socket_sendto(struct udp_pcb **udp, struct netif *nif, const voi
 
     memcpy(p->payload, buf, len);
 
-    ip_addr_t dest;
-    IP4_ADDR(ip_2_ip4(&dest), ip >> 24 & 0xff, ip >> 16 & 0xff, ip >> 8 & 0xff, ip & 0xff);
-    err_t err;
-    if (nif != NULL)
-    {
-        err = udp_sendto_if(*udp, p, &dest, port, nif);
-    }
-    else
-    {
-        err = udp_sendto(*udp, p, &dest, port);
-    }
+    err_t err = udp_sendto(*udp, p, addr, port);
 
     pbuf_free(p);
 
@@ -56,9 +47,8 @@ static int dhcp_socket_sendto(struct udp_pcb **udp, struct netif *nif, const voi
 void udp_receive_callback(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)
 {
     UdpSocket *sock = (UdpSocket *)arg;
-    struct netif *nif = ip_current_input_netif();
-    auto msg = "howdy"sv;
-    dhcp_socket_sendto(&sock->udp, nif, msg.data(), msg.length(), addr->addr, port);
+    auto msg = "howdy!\n"sv;
+    udp_send_buffer(&sock->udp, msg.data(), msg.length(), addr, port);
 }
 
 UdpSocket::UdpSocket(int port)
