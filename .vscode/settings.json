@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.ejs": "html",
+        "*.in": "cpp",
+        "string_view": "cpp",
+        "string": "cpp",
+        "system_error": "cpp",
+        "array": "c",
+        "initializer_list": "c",
+        "cstdint": "cpp"
+    }
+}
