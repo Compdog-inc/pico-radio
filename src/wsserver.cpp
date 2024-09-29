@@ -113,6 +113,14 @@ void WsServer::handleRawConnection(TcpClient *client)
     client->~TcpClient();
 }
 
+void WsServer::handleClient(ClientEntry *client)
+{
+    while (true)
+    {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void WsServer::acceptConnections()
 {
     while (isListening())
