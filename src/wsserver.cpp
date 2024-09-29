@@ -44,17 +44,17 @@ struct _handleRawConnection_taskargs
 
 void WsServer::handleRawConnection(TcpClient *client)
 {
-    uint8_t methodBuf[3];
-    if (client->readBytes(methodBuf, 3, 5000) != 3 || methodBuf[0] != 'G' || methodBuf[1] != 'E' || methodBuf[2] != 'T')
+    uint8_t methodBuf[4];
+    if (client->readBytes(methodBuf, 4, 5000) != 4 || methodBuf[0] != 'G' || methodBuf[1] != 'E' || methodBuf[2] != 'T' || methodBuf[3] != ' ')
     {
         client->disconnect();
         client->~TcpClient();
         return;
     }
 
-    TextStream *stream = new TextStream(client);
+    TextStream *stream = new TextStream(client, 1024);
     std::string line = stream->readLine(5000);
-    auto parts = std::views::split(line, "|"sv);
+    auto parts = std::views::split(line, " "sv);
     auto iter = parts.begin();
     std::string path = std::string((*iter).begin(), (*iter).end());
 
@@ -65,7 +65,12 @@ void WsServer::handleRawConnection(TcpClient *client)
         if (sep != std::string::npos)
         {
             std::string headerName = line.substr(0, sep);
-            std::string headerValue = line.substr(sep);
+
+            auto valueStart = line.find(' ', sep);
+            if (valueStart == std::string::npos)
+                valueStart = sep;
+
+            std::string headerValue = line.substr(valueStart + 1);
             printf("Header '%.*s' is '%.*s'\n", headerName.length(), headerName.data(), headerValue.length(), headerValue.data());
         }
     } while (!line.empty());

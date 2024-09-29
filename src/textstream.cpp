@@ -61,6 +61,11 @@ std::string TextStream::readLine(uint32_t timeout)
         {
             std::string str = std::string((char *)(buffer + rstart), end - rstart);
 
+            if (buffer[end] == '\r' && end + 1 < rend && buffer[end + 1] == '\n') // special CR+LF handling
+            {
+                end++;
+            }
+
             end++;
             rpos = end;
             rstart = rpos;
