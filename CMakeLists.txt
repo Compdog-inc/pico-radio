@@ -79,6 +79,8 @@ add_library(pico-radio STATIC
         src/tcpclient.cpp
         src/textstream.cpp
         src/udpsocket.cpp
+        src/guid.cpp
+        src/websocket.cpp
         src/wsserver.cpp
         )
 
