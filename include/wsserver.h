@@ -45,15 +45,15 @@ public:
     bool isClientConnected(const Guid &guid);
     void disconnectClient(const Guid &guid);
 
-    bool Send(const Guid &guid, std::string_view data, WebSocketMessageType messageType = WebSocketMessageType::Text);
-    bool Send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
+    bool send(const Guid &guid, std::string_view data, WebSocketMessageType messageType = WebSocketMessageType::Text);
+    bool send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
 
     EventHandler<void (*)()> clientConnected;
     EventHandler<void (*)()> clientDisconnected;
     EventHandler<void (*)()> messageReceived;
 
     int clientCount;
-    ClientEntry clients[WS_SERVER_MAX_CLIENT_COUNT];
+    ClientEntry *clients[WS_SERVER_MAX_CLIENT_COUNT];
 
     void handleRawConnection(TcpClient *client);
     void acceptConnections();
@@ -62,6 +62,8 @@ private:
     int port;
     TcpListener *listener;
     TaskHandle_t acceptConnectionsTask;
+
+    void handleClient(ClientEntry *client);
 };
 
 #endif

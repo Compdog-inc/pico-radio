@@ -24,6 +24,7 @@ public:
 
     Guid(std::string str);
 
+    static Guid NewGuid();
     static bool TryParse(std::string str, Guid *guid);
 
     std::string toString();

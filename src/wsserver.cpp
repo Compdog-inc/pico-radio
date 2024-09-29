@@ -58,6 +58,9 @@ void WsServer::handleRawConnection(TcpClient *client)
     auto iter = parts.begin();
     std::string path = std::string((*iter).begin(), (*iter).end());
 
+    bool foundConnectionHeader = false;
+    bool foundUpgradeHeader = false;
+
     do
     {
         line = stream->readLine(5000);
@@ -71,11 +74,41 @@ void WsServer::handleRawConnection(TcpClient *client)
                 valueStart = sep;
 
             std::string headerValue = line.substr(valueStart + 1);
-            printf("Header '%.*s' is '%.*s'\n", headerName.length(), headerName.data(), headerValue.length(), headerValue.data());
+
+            if (headerName == "Connection"sv && headerValue == "Upgrade"sv)
+            {
+                foundConnectionHeader = true;
+            }
+            else if (headerName == "Upgrade"sv && headerValue == "websocket"sv)
+            {
+                foundUpgradeHeader = true;
+            }
         }
     } while (!line.empty());
 
-    stream->~TextStream();
+    if (!foundConnectionHeader || !foundUpgradeHeader || clientCount == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
+    {
+        stream->writeString("HTTP/1.1 400 Bad Request\r\n\r\n"sv);
+        stream->~TextStream();
+    }
+    else
+    {
+        stream->writeString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
+                            "T+6DKKn30U5GpA2CkOU0pXhGflY="s + // accept key
+                            "\r\nSec-Websocket-Protocol: "s +
+                            "testprotocol"s + // supported protocols
+                            "\r\n\r\n"s);
+        stream->~TextStream();
+
+        Guid guid = Guid::NewGuid();
+        WebSocket *ws = new WebSocket();
+        SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
+        ClientEntry *entry = new ClientEntry(guid, ws, path, mutex);
+
+        clients[clientCount++] = entry;
+        handleClient(entry);
+    }
+
     client->disconnect();
     client->~TcpClient();
 }
@@ -126,7 +159,7 @@ bool WsServer::isClientConnected(const Guid &guid)
 {
     for (int i = 0; i < clientCount; i++)
     {
-        if (clients[i].guid == guid)
+        if (clients[i]->guid == guid)
         {
             return true;
         }
@@ -139,7 +172,7 @@ void WsServer::disconnectClient(const Guid &guid)
 {
     for (int i = 0; i < clientCount; i++)
     {
-        if (clients[i].guid == guid)
+        if (clients[i]->guid == guid)
         {
             // close and dispose ws
             return;
@@ -147,25 +180,25 @@ void WsServer::disconnectClient(const Guid &guid)
     }
 }
 
-bool WsServer::Send(const Guid &guid, std::string_view data, WebSocketMessageType messageType)
+bool WsServer::send(const Guid &guid, std::string_view data, WebSocketMessageType messageType)
 {
-    return Send(guid, (const uint8_t *)data.data(), data.length(), messageType);
+    return send(guid, (const uint8_t *)data.data(), data.length(), messageType);
 }
 
-bool WsServer::Send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType)
+bool WsServer::send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType)
 {
     for (int i = 0; i < clientCount; i++)
     {
-        if (clients[i].guid == guid)
+        if (clients[i]->guid == guid)
         {
-            if (!xSemaphoreTake(clients[i].sendMutex, 500))
+            if (!xSemaphoreTake(clients[i]->sendMutex, 500))
             {
                 return false;
             }
 
             // send ws
 
-            xSemaphoreGive(clients[i].sendMutex);
+            xSemaphoreGive(clients[i]->sendMutex);
             return true;
         }
     }

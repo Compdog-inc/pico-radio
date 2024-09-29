@@ -5,6 +5,7 @@
 // ==--==
 
 #include <pico/stdlib.h>
+#include <pico/rand.h>
 #include "guid.h"
 
 using namespace std::literals;
@@ -101,6 +102,13 @@ Guid::Guid(std::string str)
         _j = 0xAB;
         _k = 0xCD;
     }
+}
+
+Guid Guid::NewGuid()
+{
+    Guid guid = {};
+    get_rand_128((rng_128_t *)&guid); // populate 128-bit GUID with random values
+    return guid;
 }
 
 bool Guid::TryParse(std::string str, Guid *guid)
