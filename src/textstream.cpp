@@ -52,6 +52,29 @@ std::string TextStream::readLine()
 
 std::string TextStream::readLine(uint32_t timeout)
 {
+    if (end < rend)
+    {
+    check_line:
+        while (end < rend && buffer[end] != '\n' && buffer[end] != '\r')
+            end++;
+        if (end < rend && (buffer[end] == '\n' || buffer[end] == '\r'))
+        {
+            std::string str = std::string((char *)(buffer + rstart), end - rstart);
+
+            end++;
+            rpos = end;
+            rstart = rpos;
+
+            return str;
+        }
+    }
+    else
+    {
+        ssize_t unread = end - rstart;
+        rpos = unread;
+        shift_buffer(buffer, bufferSize, -rstart); // shift unread data to the start
+    }
+
     int rc;
 
     while (source->isConnected() && (rc = source->readBytes(
@@ -61,28 +84,13 @@ std::string TextStream::readLine(uint32_t timeout)
     {
         if (rc)
         {
-            ssize_t rstart = 0;
+            rstart = 0;
             rend = rpos + rc;
-            ssize_t end = rpos;
+            end = rpos;
 
-            while (end < rend)
+            if (end < rend)
             {
-                while (end < rend && buffer[end] != '\n' && buffer[end] != '\r')
-                    end++;
-                if (end < rend && (buffer[end] == '\n' || buffer[end] == '\r'))
-                {
-                    std::string_view str = std::string_view((char *)(buffer + rstart), end - rstart);
-
-                    end++;
-                    rpos = end;
-                    rstart = rpos;
-
-                    ssize_t unread = end - rstart;
-                    rpos = unread;
-                    shift_buffer(buffer, bufferSize, -rstart); // shift unread data to the start
-
-                    return std::string(str);
-                }
+                goto check_line;
             }
         }
         else

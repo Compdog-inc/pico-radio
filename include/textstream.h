@@ -46,6 +46,8 @@ private:
 
     ssize_t rpos = 0;
     ssize_t rend = 0;
+    ssize_t rstart = 0;
+    ssize_t end = 0;
 };
 
 #endif
