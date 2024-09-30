@@ -58,6 +58,9 @@ public:
     void handleRawConnection(TcpClient *client);
     void acceptConnections();
 
+    typedef std::string (*WsServerProtocolCallback)(const std::string &requestedProtocolsHeader);
+    WsServerProtocolCallback protocolCallback = nullptr;
+
 private:
     int port;
     TcpListener *listener;

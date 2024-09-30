@@ -71,6 +71,7 @@ void WsServer::handleRawConnection(TcpClient *client)
     bool foundConnectionHeader = false;
     bool foundUpgradeHeader = false;
     std::string clientKey;
+    std::string protocols;
 
     do
     {
@@ -98,6 +99,10 @@ void WsServer::handleRawConnection(TcpClient *client)
             {
                 clientKey = headerValue;
             }
+            else if (headerName == "Sec-Websocket-Protocol")
+            {
+                protocols = headerValue;
+            }
         }
     } while (!line.empty());
 
@@ -113,15 +118,24 @@ void WsServer::handleRawConnection(TcpClient *client)
         std::string handshakeKey = sha1.final();
         xSemaphoreGive(sha1_mutex);
 
-        stream->writeString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
-                            handshakeKey +
-                            "\r\nSec-Websocket-Protocol: "s +
-                            "testprotocol"s + // supported protocols
-                            "\r\n\r\n"s);
+        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : protocolCallback(protocols);
+
+        std::string response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
+                               handshakeKey +
+                               "\r\n"s;
+
+        if (!acceptedProtocol.empty())
+        {
+            response.append("Sec-Websocket-Protocol: "s + acceptedProtocol + "\r\n"s);
+        }
+
+        response.append("\r\n"sv);
+
+        stream->writeString(response);
         stream->~TextStream();
 
         Guid guid = Guid::NewGuid();
-        WebSocket *ws = new WebSocket();
+        WebSocket *ws = new WebSocket(client);
         SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
         ClientEntry *entry = new ClientEntry(guid, ws, path, mutex);
 

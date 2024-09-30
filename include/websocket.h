@@ -9,6 +9,9 @@
 
 class WebSocket
 {
+public:
+    WebSocket(TcpClient *tcp);
+
 private:
     TcpClient *tcp;
 };
