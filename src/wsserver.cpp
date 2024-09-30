@@ -4,7 +4,11 @@
 #include <task.h>
 #include <semphr.h>
 #include <string>
+#include <algorithm>
+#include <cctype>
+#include <locale>
 #include <ranges>
+#include <vector>
 #include "wsserver.h"
 #include "tcpclient.h"
 #include "textstream.h"
@@ -51,6 +55,23 @@ struct _handleRawConnection_taskargs
     WsServer *server;
     TcpClient *client;
 };
+
+// From https://stackoverflow.com/a/217605
+// trim from start (in place)
+inline void ltrim(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch)
+                                    { return !std::isspace(ch); }));
+}
+
+// trim from end (in place)
+inline void rtrim(std::string &s)
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch)
+                         { return !std::isspace(ch); })
+                .base(),
+            s.end());
+}
 
 void WsServer::handleRawConnection(TcpClient *client)
 {
@@ -99,7 +120,7 @@ void WsServer::handleRawConnection(TcpClient *client)
             {
                 clientKey = headerValue;
             }
-            else if (headerName == "Sec-Websocket-Protocol")
+            else if (headerName == "Sec-WebSocket-Protocol")
             {
                 protocols = headerValue;
             }
@@ -118,7 +139,15 @@ void WsServer::handleRawConnection(TcpClient *client)
         std::string handshakeKey = sha1.final();
         xSemaphoreGive(sha1_mutex);
 
-        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : protocolCallback(protocols);
+        auto requestedProtocols = std::views::split(protocols, ","sv) | std::views::transform([](auto &&elem)
+                                                                                              {
+            std::string str(elem.begin(), elem.end());
+            ltrim(str);
+            rtrim(str);
+            return str; });
+        std::vector<std::string> requestedProtocolsVec(requestedProtocols.begin(), requestedProtocols.end());
+
+        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : protocolCallback(requestedProtocolsVec);
 
         std::string response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
                                handshakeKey +
@@ -169,10 +198,10 @@ void WsServer::acceptConnections()
 
             TaskHandle_t task;
             xTaskCreate([](void *ins) -> void
-                        { _handleRawConnection_taskargs *args = (_handleRawConnection_taskargs *)ins;
-            args->server->handleRawConnection(args->client);
-            vPortFree(args);
-            vTaskDelete(NULL); }, "wsclient", configMINIMAL_STACK_SIZE, args, 3, &task);
+                        { _handleRawConnection_taskargs *targs = (_handleRawConnection_taskargs *)ins;
+            targs->server->handleRawConnection(targs->client);
+            vPortFree(ins);
+            vTaskDelete(NULL); }, "wsclient", (uint32_t)4096, args, 3, &task);
         }
     }
 }

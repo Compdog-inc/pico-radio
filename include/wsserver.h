@@ -11,6 +11,7 @@
 #include "guid.h"
 #include "websocket.h"
 #include <semphr.h>
+#include <vector>
 
 enum class WebSocketMessageType
 {
@@ -58,7 +59,7 @@ public:
     void handleRawConnection(TcpClient *client);
     void acceptConnections();
 
-    typedef std::string (*WsServerProtocolCallback)(const std::string &requestedProtocolsHeader);
+    typedef std::string (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols);
     WsServerProtocolCallback protocolCallback = nullptr;
 
 private:
