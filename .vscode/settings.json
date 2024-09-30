@@ -48,6 +48,13 @@
         "typeinfo": "cpp",
         "ranges": "cpp",
         "span": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "ctime": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp",
+        "iostream": "cpp",
+        "istream": "cpp",
+        "sstream": "cpp",
+        "xstring": "cpp"
     }
 }

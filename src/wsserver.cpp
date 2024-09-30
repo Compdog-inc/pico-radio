@@ -8,8 +8,14 @@
 #include "wsserver.h"
 #include "tcpclient.h"
 #include "textstream.h"
+#include "sha1.hpp"
 
 using namespace std::literals;
+
+static SemaphoreHandle_t sha1_mutex = NULL;
+static SHA1 sha1 = SHA1();
+
+constexpr std::string_view WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"sv;
 
 WsServer::ClientEntry::ClientEntry() : guid(), ws(nullptr)
 {
@@ -23,6 +29,10 @@ WsServer::WsServer(int port) : port(port)
 {
     listener = nullptr;
     clientCount = 0;
+    if (!sha1_mutex)
+    {
+        sha1_mutex = xSemaphoreCreateMutex();
+    }
 }
 
 WsServer::~WsServer()
@@ -60,6 +70,7 @@ void WsServer::handleRawConnection(TcpClient *client)
 
     bool foundConnectionHeader = false;
     bool foundUpgradeHeader = false;
+    std::string clientKey;
 
     do
     {
@@ -83,18 +94,27 @@ void WsServer::handleRawConnection(TcpClient *client)
             {
                 foundUpgradeHeader = true;
             }
+            else if (headerName == "Sec-WebSocket-Key"sv)
+            {
+                clientKey = headerValue;
+            }
         }
     } while (!line.empty());
 
-    if (!foundConnectionHeader || !foundUpgradeHeader || clientCount == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
+    if (!foundConnectionHeader || !foundUpgradeHeader || clientKey.empty() || clientCount == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
     {
         stream->writeString("HTTP/1.1 400 Bad Request\r\n\r\n"sv);
         stream->~TextStream();
     }
     else
     {
+        xSemaphoreTake(sha1_mutex, 1000);
+        sha1.update(clientKey.append(WS_GUID));
+        std::string handshakeKey = sha1.final();
+        xSemaphoreGive(sha1_mutex);
+
         stream->writeString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
-                            "T+6DKKn30U5GpA2CkOU0pXhGflY="s + // accept key
+                            handshakeKey +
                             "\r\nSec-Websocket-Protocol: "s +
                             "testprotocol"s + // supported protocols
                             "\r\n\r\n"s);
