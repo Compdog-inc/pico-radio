@@ -38,8 +38,8 @@ private:
     uint64_t transforms;
 };
 
-static const size_t BLOCK_INTS = 16; /* number of 32bit integers per SHA1 block */
-static const size_t BLOCK_BYTES = BLOCK_INTS * 4;
+static constexpr size_t BLOCK_INTS = 16; /* number of 32bit integers per SHA1 block */
+static constexpr size_t BLOCK_BYTES = BLOCK_INTS * 4;
 
 inline static void reset(uint32_t digest[], std::string &buffer, uint64_t &transforms)
 {
@@ -345,6 +345,12 @@ inline std::string SHA1::final()
     transform(digest, block, transforms);
 
     /* base64 std::string */
+    // prepare for network transfer
+    digest[0] = htonl(digest[0]);
+    digest[1] = htonl(digest[1]);
+    digest[2] = htonl(digest[2]);
+    digest[3] = htonl(digest[3]);
+    digest[4] = htonl(digest[4]);
     std::string result = base64_encode((uint8_t *)digest, sizeof(digest));
 
     /* Reset for next run */
