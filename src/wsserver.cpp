@@ -127,16 +127,19 @@ void WsServer::acceptConnections()
     {
         TcpClient *client = listener->acceptClient();
 
-        _handleRawConnection_taskargs *args = (_handleRawConnection_taskargs *)pvPortMalloc(sizeof(_handleRawConnection_taskargs));
-        args->server = this;
-        args->client = client;
+        if (client != nullptr)
+        {
+            _handleRawConnection_taskargs *args = (_handleRawConnection_taskargs *)pvPortMalloc(sizeof(_handleRawConnection_taskargs));
+            args->server = this;
+            args->client = client;
 
-        TaskHandle_t task;
-        xTaskCreate([](void *ins) -> void
-                    { _handleRawConnection_taskargs *args = (_handleRawConnection_taskargs *)ins;
+            TaskHandle_t task;
+            xTaskCreate([](void *ins) -> void
+                        { _handleRawConnection_taskargs *args = (_handleRawConnection_taskargs *)ins;
             args->server->handleRawConnection(args->client);
             vPortFree(args);
             vTaskDelete(NULL); }, "wsclient", configMINIMAL_STACK_SIZE, args, 3, &task);
+        }
     }
 }
 
