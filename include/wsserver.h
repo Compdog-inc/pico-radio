@@ -13,13 +13,6 @@
 #include <semphr.h>
 #include <vector>
 
-enum class WebSocketMessageType
-{
-    Text,
-    Binary,
-    Close
-};
-
 constexpr int WS_SERVER_MAX_CLIENT_COUNT = 10;
 
 class WsServer
@@ -30,10 +23,9 @@ public:
         Guid guid;
         WebSocket *ws;
         std::string requestedPath;
-        SemaphoreHandle_t sendMutex;
 
         ClientEntry();
-        ClientEntry(Guid guid, WebSocket *ws, std::string requestedPath, SemaphoreHandle_t sendMutex);
+        ClientEntry(Guid guid, WebSocket *ws, std::string requestedPath);
     };
 
     WsServer(int port);
@@ -53,8 +45,7 @@ public:
     EventHandler<void (*)()> clientDisconnected;
     EventHandler<void (*)()> messageReceived;
 
-    int clientCount;
-    ClientEntry *clients[WS_SERVER_MAX_CLIENT_COUNT];
+    std::vector<ClientEntry *> clients = std::vector<ClientEntry *>(WS_SERVER_MAX_CLIENT_COUNT);
 
     void handleRawConnection(TcpClient *client);
     void acceptConnections();
@@ -66,8 +57,6 @@ private:
     int port;
     TcpListener *listener;
     TaskHandle_t acceptConnectionsTask;
-
-    void handleClient(ClientEntry *client);
 };
 
 #endif

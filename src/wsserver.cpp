@@ -25,14 +25,13 @@ WsServer::ClientEntry::ClientEntry() : guid(), ws(nullptr)
 {
 }
 
-WsServer::ClientEntry::ClientEntry(Guid guid, WebSocket *ws, std::string requestedPath, SemaphoreHandle_t sendMutex) : guid(guid), ws(ws), requestedPath(requestedPath), sendMutex(sendMutex)
+WsServer::ClientEntry::ClientEntry(Guid guid, WebSocket *ws, std::string requestedPath) : guid(guid), ws(ws), requestedPath(requestedPath)
 {
 }
 
 WsServer::WsServer(int port) : port(port)
 {
     listener = nullptr;
-    clientCount = 0;
     if (!sha1_mutex)
     {
         sha1_mutex = xSemaphoreCreateMutex();
@@ -41,9 +40,9 @@ WsServer::WsServer(int port) : port(port)
 
 WsServer::~WsServer()
 {
-    for (int i = 0; i < clientCount; i++)
+    for (size_t i = 0; i < clients.size(); i++)
     {
-        // close ws
+        clients[i]->ws->close();
     }
 
     listener->stop();
@@ -127,7 +126,7 @@ void WsServer::handleRawConnection(TcpClient *client)
         }
     } while (!line.empty());
 
-    if (!foundConnectionHeader || !foundUpgradeHeader || clientKey.empty() || clientCount == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
+    if (!foundConnectionHeader || !foundUpgradeHeader || clientKey.empty() || clients.size() == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
     {
         stream->writeString("HTTP/1.1 400 Bad Request\r\n\r\n"sv);
         stream->~TextStream();
@@ -165,23 +164,21 @@ void WsServer::handleRawConnection(TcpClient *client)
 
         Guid guid = Guid::NewGuid();
         WebSocket *ws = new WebSocket(client);
-        SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
-        ClientEntry *entry = new ClientEntry(guid, ws, path, mutex);
+        ClientEntry *entry = new ClientEntry(guid, ws, path);
 
-        clients[clientCount++] = entry;
-        handleClient(entry);
+        clients.push_back(entry);
+        ws->joinMessageLoop();
+
+        clients.erase(std::remove_if(clients.begin(), clients.end(),
+                                     [entry](ClientEntry *i)
+                                     { return i == entry; }));
+        delete entry;
+        delete ws;
+        return;
     }
 
     client->disconnect();
     client->~TcpClient();
-}
-
-void WsServer::handleClient(ClientEntry *client)
-{
-    while (true)
-    {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
 }
 
 void WsServer::acceptConnections()
@@ -231,11 +228,11 @@ bool WsServer::isListening()
 
 bool WsServer::isClientConnected(const Guid &guid)
 {
-    for (int i = 0; i < clientCount; i++)
+    for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
         {
-            return true;
+            return clients[i]->ws->isConnected();
         }
     }
 
@@ -244,11 +241,11 @@ bool WsServer::isClientConnected(const Guid &guid)
 
 void WsServer::disconnectClient(const Guid &guid)
 {
-    for (int i = 0; i < clientCount; i++)
+    for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
         {
-            // close and dispose ws
+            clients[i]->ws->close();
             return;
         }
     }
@@ -256,24 +253,24 @@ void WsServer::disconnectClient(const Guid &guid)
 
 bool WsServer::send(const Guid &guid, std::string_view data, WebSocketMessageType messageType)
 {
-    return send(guid, (const uint8_t *)data.data(), data.length(), messageType);
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        if (clients[i]->guid == guid)
+        {
+            return clients[i]->ws->send(data, messageType);
+        }
+    }
+
+    return false;
 }
 
 bool WsServer::send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType)
 {
-    for (int i = 0; i < clientCount; i++)
+    for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
         {
-            if (!xSemaphoreTake(clients[i]->sendMutex, 500))
-            {
-                return false;
-            }
-
-            // send ws
-
-            xSemaphoreGive(clients[i]->sendMutex);
-            return true;
+            return clients[i]->ws->send(data, length, messageType);
         }
     }
 
