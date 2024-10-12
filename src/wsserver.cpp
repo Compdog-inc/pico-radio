@@ -29,8 +29,10 @@ WsServer::ClientEntry::ClientEntry(Guid guid, WebSocket *ws, std::string request
 {
 }
 
-WsServer::WsServer(int port) : port(port)
+WsServer::WsServer(int port) : clients(), port(port)
 {
+    clients.reserve(WS_SERVER_MAX_CLIENT_COUNT);
+
     listener = nullptr;
     if (!sha1_mutex)
     {

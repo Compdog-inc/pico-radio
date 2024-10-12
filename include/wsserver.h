@@ -45,7 +45,7 @@ public:
     EventHandler<void (*)()> clientDisconnected;
     EventHandler<void (*)()> messageReceived;
 
-    std::vector<ClientEntry *> clients = std::vector<ClientEntry *>(WS_SERVER_MAX_CLIENT_COUNT);
+    std::vector<ClientEntry *> clients;
 
     void handleRawConnection(TcpClient *client);
     void acceptConnections();
