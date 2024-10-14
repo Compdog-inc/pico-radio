@@ -22,10 +22,7 @@ public:
     Guid(int32_t a, int16_t b, int16_t c, const uint8_t d[8]);
     Guid(int32_t a, int16_t b, int16_t c, uint8_t d, uint8_t e, uint8_t f, uint8_t g, uint8_t h, uint8_t i, uint8_t j, uint8_t k);
 
-    Guid(std::string str);
-
     static Guid NewGuid();
-    static bool TryParse(std::string str, Guid *guid);
 
     std::string toString();
 

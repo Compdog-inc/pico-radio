@@ -7,6 +7,7 @@
 #include <pico/stdlib.h>
 #include <pico/rand.h>
 #include "guid.h"
+#include "sha1.hpp"
 
 using namespace std::literals;
 
@@ -85,25 +86,6 @@ Guid::Guid(int32_t a, int16_t b, int16_t c, uint8_t d, uint8_t e, uint8_t f, uin
     _k = k;
 }
 
-Guid::Guid(std::string str)
-{
-    if (!Guid::TryParse(str, this))
-    {
-        // error state
-        _a = 0xABCDEFAB;
-        _b = 0xABCD;
-        _c = 0xABCD;
-        _d = 0xAB;
-        _e = 0xCD;
-        _f = 0xEF;
-        _g = 0xAB;
-        _h = 0xCD;
-        _i = 0xEF;
-        _j = 0xAB;
-        _k = 0xCD;
-    }
-}
-
 Guid Guid::NewGuid()
 {
     Guid guid = {};
@@ -111,14 +93,9 @@ Guid Guid::NewGuid()
     return guid;
 }
 
-bool Guid::TryParse(std::string str, Guid *guid)
-{
-    return false; // TODO: placeholder
-}
-
 std::string Guid::toString()
 {
-    return ""s;
+    return base64_encode((uint8_t *)this, 16);
 }
 
 bool Guid::equals(const Guid &other)
