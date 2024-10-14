@@ -74,6 +74,42 @@ inline void rtrim(std::string &s)
             s.end());
 }
 
+void ws_pong(WebSocket *ws, void *args, const uint8_t *payload, size_t payloadLength)
+{
+    WsServer *server = (WsServer *)args;
+    if (server->pongCallback != nullptr)
+    {
+        const Guid &guid = (*std::find_if(server->clients.begin(), server->clients.end(), [ws](WsServer::ClientEntry *entry)
+                                          { return entry->ws == ws; }))
+                               ->guid;
+        server->pongCallback(server, guid, payload, payloadLength);
+    }
+}
+
+void ws_close(WebSocket *ws, void *args, WebSocketStatusCode statusCode, const std::string_view &reason)
+{
+    WsServer *server = (WsServer *)args;
+    if (server->closeCallback != nullptr)
+    {
+        const Guid &guid = (*std::find_if(server->clients.begin(), server->clients.end(), [ws](WsServer::ClientEntry *entry)
+                                          { return entry->ws == ws; }))
+                               ->guid;
+        server->closeCallback(server, guid, statusCode, reason);
+    }
+}
+
+void ws_received(WebSocket *ws, void *args, const WebSocketFrame &frame)
+{
+    WsServer *server = (WsServer *)args;
+    if (server->receivedCallback != nullptr)
+    {
+        const Guid &guid = (*std::find_if(server->clients.begin(), server->clients.end(), [ws](WsServer::ClientEntry *entry)
+                                          { return entry->ws == ws; }))
+                               ->guid;
+        server->receivedCallback(server, guid, frame);
+    }
+}
+
 void WsServer::handleRawConnection(TcpClient *client)
 {
     uint8_t methodBuf[4];
@@ -166,6 +202,10 @@ void WsServer::handleRawConnection(TcpClient *client)
 
         Guid guid = Guid::NewGuid();
         WebSocket *ws = new WebSocket(client);
+        ws->callbackArgs = this; // set args to reference of this instance
+        ws->pongCallback = ws_pong;
+        ws->closeCallback = ws_close;
+        ws->receivedCallback = ws_received;
         ClientEntry *entry = new ClientEntry(guid, ws, path);
 
         clients.push_back(entry);
@@ -248,6 +288,30 @@ void WsServer::disconnectClient(const Guid &guid)
         if (clients[i]->guid == guid)
         {
             clients[i]->ws->close();
+            return;
+        }
+    }
+}
+
+void WsServer::ping(const Guid &guid)
+{
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        if (clients[i]->guid == guid)
+        {
+            clients[i]->ws->ping();
+            return;
+        }
+    }
+}
+
+void WsServer::ping(const Guid &guid, const uint8_t *payload, size_t payloadLength)
+{
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        if (clients[i]->guid == guid)
+        {
+            clients[i]->ws->ping(payload, payloadLength);
             return;
         }
     }

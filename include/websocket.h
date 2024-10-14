@@ -24,18 +24,32 @@ enum class WebSocketOpCode : unsigned int
     Pong = 0xA
 };
 
+enum class WebSocketStatusCode : uint16_t
+{
+    NormalClosure = 1000,
+    GoingAway = 1001,
+    ProctolError = 1002,
+    UnsupportedFormat = 1003,
+    NoStatus = 1005,
+    ClosedAbnormally = 1006,
+    UnexpectedData = 1007,
+    MessageViolation = 1008,
+    MessageTooLong = 1009,
+    MissingExtension = 1010,
+    UnexpectedCondition = 1011,
+    TLSFailed = 1015
+};
+
 typedef struct WebSocketFrameHeader
 {
-    unsigned int FIN : 1;
-    unsigned int RSV1 : 1;
-    unsigned int RSV2 : 1;
-    unsigned int RSV3 : 1;
-
     WebSocketOpCode opcode : 4;
-
-    unsigned int MASK : 1;
+    unsigned int RSV3 : 1;
+    unsigned int RSV2 : 1;
+    unsigned int RSV1 : 1;
+    unsigned int FIN : 1;
 
     unsigned int payloadLen : 7;
+    unsigned int MASK : 1;
 } WebSocketFrameHeader;
 
 typedef struct WebSocketFrame
@@ -59,7 +73,17 @@ class WebSocket
 public:
     WebSocket(TcpClient *tcp);
 
+    void disconnect();
+
     void close();
+    void close(WebSocketStatusCode statusCode);
+    void close(WebSocketStatusCode statusCode, const std::string_view &reason);
+    void close(uint16_t statusCode, const std::string_view &reason);
+
+    void ping();
+    void ping(const uint8_t *payload, size_t payloadLength);
+    void pong();
+    void pong(const uint8_t *payload, size_t payloadLength);
 
     bool isConnected();
 
@@ -67,6 +91,15 @@ public:
     bool send(const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
 
     void joinMessageLoop();
+
+    typedef void (*WebsocketPongCallback)(WebSocket *ws, void *args, const uint8_t *payload, size_t payloadLength);
+    WebsocketPongCallback pongCallback = nullptr;
+    typedef void (*WebsocketCloseCallback)(WebSocket *ws, void *args, WebSocketStatusCode statusCode, const std::string_view &reason);
+    WebsocketCloseCallback closeCallback = nullptr;
+    typedef void (*WebsocketReceivedCallback)(WebSocket *ws, void *args, const WebSocketFrame &frame);
+    WebsocketReceivedCallback receivedCallback = nullptr;
+
+    void *callbackArgs = nullptr;
 
 private:
     TcpClient *tcp;
@@ -76,7 +109,12 @@ private:
     void maskPayload(uint8_t *payload, size_t payloadLength, uint32_t maskingKey);
     void handleFrame(const WebSocketFrameHeader &header, uint8_t *payload, size_t payloadLength);
 
+    bool sendFrame(const WebSocketFrameHeader &header, const uint8_t *payload, size_t payloadLength, uint32_t maskingKey);
+    bool sendFrame(const WebSocketFrameHeader &header, const uint8_t *payload1, size_t payload1Length, const uint8_t *payload2, size_t payload2Length, uint32_t maskingKey);
+
     WebSocketFrame currentFrame;
+    bool closeFrameSent = false;
+    bool useMasking;
 };
 
 #endif

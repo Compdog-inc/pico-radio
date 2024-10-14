@@ -38,6 +38,9 @@ public:
     bool isClientConnected(const Guid &guid);
     void disconnectClient(const Guid &guid);
 
+    void ping(const Guid &guid);
+    void ping(const Guid &guid, const uint8_t *payload, size_t payloadLength);
+
     bool send(const Guid &guid, std::string_view data, WebSocketMessageType messageType = WebSocketMessageType::Text);
     bool send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
 
@@ -52,6 +55,13 @@ public:
 
     typedef std::string (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols);
     WsServerProtocolCallback protocolCallback = nullptr;
+
+    typedef void (*WsServerPongCallback)(WsServer *server, const Guid &guid, const uint8_t *payload, size_t payloadLength);
+    WsServerPongCallback pongCallback = nullptr;
+    typedef void (*WsServerCloseCallback)(WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason);
+    WsServerCloseCallback closeCallback = nullptr;
+    typedef void (*WsServerReceivedCallback)(WsServer *server, const Guid &guid, const WebSocketFrame &frame);
+    WsServerReceivedCallback receivedCallback = nullptr;
 
 private:
     int port;
