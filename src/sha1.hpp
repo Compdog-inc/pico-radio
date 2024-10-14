@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <string>
+#include <lwip/ip4_addr.h>
 
 class SHA1
 {
