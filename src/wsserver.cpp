@@ -203,6 +203,7 @@ void WsServer::handleRawConnection(TcpClient *client)
         Guid guid = Guid::NewGuid();
         WebSocket *ws = new WebSocket(client);
         ws->callbackArgs = this; // set args to reference of this instance
+        ws->serverProtocol = acceptedProtocol;
         ws->pongCallback = ws_pong;
         ws->closeCallback = ws_close;
         ws->receivedCallback = ws_received;
