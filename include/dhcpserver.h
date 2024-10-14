@@ -26,7 +26,7 @@
 #ifndef MICROPY_INCLUDED_LIB_NETUTILS_DHCPSERVER_H
 #define MICROPY_INCLUDED_LIB_NETUTILS_DHCPSERVER_H
 
-#include "lwip/ip_addr.h"
+#include <lwip/ip_addr.h>
 
 #define DHCPS_BASE_IP (16)
 #define DHCPS_MAX_IP (8)

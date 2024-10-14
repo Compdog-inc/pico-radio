@@ -34,7 +34,7 @@
 
 #include "cyw43_config.h"
 #include "dhcpserver.h"
-#include "lwip/udp.h"
+#include <lwip/udp.h>
 
 #define DHCPDISCOVER (1)
 #define DHCPOFFER (2)
