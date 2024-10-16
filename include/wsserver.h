@@ -76,10 +76,6 @@ public:
     /// @return True on success
     bool send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
 
-    EventHandler<void (*)()> clientConnected;
-    EventHandler<void (*)()> clientDisconnected;
-    EventHandler<void (*)()> messageReceived;
-
     /// @brief List of currently connected clients
     std::vector<ClientEntry *> clients;
 
@@ -95,14 +91,18 @@ public:
     typedef void (*WsServerPongCallback)(WsServer *server, const Guid &guid, const uint8_t *payload, size_t payloadLength);
     /// @brief Called whenever a ping is answered with a pong
     WsServerPongCallback pongCallback = nullptr;
-    /// @brief Callback for close frames, contains the WsServer instance, guid and the status code+reason for closing
-    typedef void (*WsServerCloseCallback)(WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason);
-    /// @brief Called whenever a close frame is received
-    WsServerCloseCallback closeCallback = nullptr;
+    /// @brief Callback for client connected events, contains the WsServer instance and client entry
+    typedef void (*ClientConnectedCallback)(WsServer *server, const ClientEntry *entry);
+    /// @brief Called whenever a client is connected
+    EventHandler<ClientConnectedCallback> clientConnected;
+    /// @brief Callback for client disconnected events, contains the WsServer instance, guid and the status code+reason for closing
+    typedef void (*ClientDisconnectedCallback)(WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason);
+    /// @brief Called whenever a close frame is received or connection is interrupted
+    EventHandler<ClientDisconnectedCallback> clientDisconnected;
     /// @brief Callback for data frames, contains the WsServer instance, guid and the received frame
-    typedef void (*WsServerReceivedCallback)(WsServer *server, const Guid &guid, const WebSocketFrame &frame);
+    typedef void (*ClientReceivedCallback)(WsServer *server, const Guid &guid, const WebSocketFrame &frame);
     /// @brief Called whenever a data frame is received
-    WsServerReceivedCallback receivedCallback = nullptr;
+    EventHandler<ClientReceivedCallback> messageReceived;
 
 private:
     /// @brief The port it is listening on

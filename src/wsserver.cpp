@@ -9,6 +9,7 @@
 #include <locale>
 #include <ranges>
 #include <vector>
+#include "config.h"
 #include "wsserver.h"
 #include "tcpclient.h"
 #include "textstream.h"
@@ -89,31 +90,37 @@ void ws_pong(WebSocket *ws, void *args, const uint8_t *payload, size_t payloadLe
 void ws_close(WebSocket *ws, void *args, WebSocketStatusCode statusCode, const std::string_view &reason)
 {
     WsServer *server = (WsServer *)args;
-    if (server->closeCallback != nullptr)
+    if (server->clientDisconnected.Count() > 0)
     {
         const Guid &guid = (*std::find_if(server->clients.begin(), server->clients.end(), [ws](WsServer::ClientEntry *entry)
                                           { return entry->ws == ws; }))
                                ->guid;
-        server->closeCallback(server, guid, statusCode, reason);
+        for (int i = 0; i < server->clientDisconnected.Count(); i++)
+        {
+            server->clientDisconnected.Get(i)(server, guid, statusCode, reason);
+        }
     }
 }
 
 void ws_received(WebSocket *ws, void *args, const WebSocketFrame &frame)
 {
     WsServer *server = (WsServer *)args;
-    if (server->receivedCallback != nullptr)
+    if (server->messageReceived.Count() > 0)
     {
         const Guid &guid = (*std::find_if(server->clients.begin(), server->clients.end(), [ws](WsServer::ClientEntry *entry)
                                           { return entry->ws == ws; }))
                                ->guid;
-        server->receivedCallback(server, guid, frame);
+        for (int i = 0; i < server->messageReceived.Count(); i++)
+        {
+            server->messageReceived.Get(i)(server, guid, frame);
+        }
     }
 }
 
 void WsServer::handleRawConnection(TcpClient *client)
 {
     uint8_t methodBuf[4];
-    if (client->readBytes(methodBuf, 4, 5000) != 4 || methodBuf[0] != 'G' || methodBuf[1] != 'E' || methodBuf[2] != 'T' || methodBuf[3] != ' ')
+    if (client->readBytes(methodBuf, 4, WEBSOCKET_TIMEOUT) != 4 || methodBuf[0] != 'G' || methodBuf[1] != 'E' || methodBuf[2] != 'T' || methodBuf[3] != ' ')
     {
         client->disconnect();
         client->~TcpClient();
@@ -121,7 +128,7 @@ void WsServer::handleRawConnection(TcpClient *client)
     }
 
     TextStream *stream = new TextStream(client, 1024);
-    std::string line = stream->readLine(5000);
+    std::string line = stream->readLine(WEBSOCKET_TIMEOUT);
     auto parts = std::views::split(line, " "sv);
     auto iter = parts.begin();
     std::string path = std::string((*iter).begin(), (*iter).end());
@@ -133,7 +140,7 @@ void WsServer::handleRawConnection(TcpClient *client)
 
     do
     {
-        line = stream->readLine(5000);
+        line = stream->readLine(WEBSOCKET_TIMEOUT);
         auto sep = line.find(':');
         if (sep != std::string::npos)
         {
@@ -210,7 +217,26 @@ void WsServer::handleRawConnection(TcpClient *client)
         ClientEntry *entry = new ClientEntry(guid, ws, path);
 
         clients.push_back(entry);
+        if (clientConnected.Count() > 0)
+        {
+            for (int i = 0; i < clientConnected.Count(); i++)
+            {
+                clientConnected.Get(i)(this, entry);
+            }
+        }
+
         ws->joinMessageLoop();
+
+        if (!ws->hasGracefullyClosed())
+        {
+            if (clientDisconnected.Count() > 0)
+            {
+                for (int i = 0; i < clientDisconnected.Count(); i++)
+                {
+                    clientDisconnected.Get(i)(this, guid, WebSocketStatusCode::ClosedAbnormally, "Message loop has ungracefully exited."sv);
+                }
+            }
+        }
 
         clients.erase(std::remove_if(clients.begin(), clients.end(),
                                      [entry](ClientEntry *i)
@@ -241,7 +267,7 @@ void WsServer::acceptConnections()
                         { _handleRawConnection_taskargs *targs = (_handleRawConnection_taskargs *)ins;
             targs->server->handleRawConnection(targs->client);
             vPortFree(ins);
-            vTaskDelete(NULL); }, "wsclient", (uint32_t)4096, args, 3, &task);
+            vTaskDelete(NULL); }, "wsclient", (uint32_t)WEBSOCKET_THREAD_STACK_SIZE, args, 3, &task);
         }
     }
 }

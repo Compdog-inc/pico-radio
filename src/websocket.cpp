@@ -6,6 +6,7 @@
 #include <vector>
 #include <format>
 #include <ranges>
+#include "config.h"
 #include "websocket.h"
 #include "tcpclient.h"
 #include "textstream.h"
@@ -75,7 +76,7 @@ WebSocket::WebSocket(std::string_view url, std::vector<std::string> protocols)
     xTaskCreate([](void *ins) -> void
                 { WebSocket *ws = (WebSocket *)ins;
         ws->enterPollLoop();
-        vTaskDelete(NULL); }, "wsmsgs", (uint32_t)4096, this, 3, &messageLoopTask);
+        vTaskDelete(NULL); }, "wsmsgs", (uint32_t)WEBSOCKET_THREAD_STACK_SIZE, this, 3, &messageLoopTask);
 }
 
 bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, std::vector<std::string> protocols)
@@ -113,7 +114,7 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
         return false;
     }
 
-    std::string line = stream->readLine(5000);
+    std::string line = stream->readLine(WEBSOCKET_TIMEOUT);
     auto parts = std::views::split(line, " "sv);
     auto iter = parts.begin();
     iter++;
@@ -131,7 +132,7 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
 
     do
     {
-        line = stream->readLine(5000);
+        line = stream->readLine(WEBSOCKET_TIMEOUT);
         auto sep = line.find(':');
         if (sep != std::string::npos)
         {
@@ -280,6 +281,11 @@ bool WebSocket::isConnected()
     return tcp->isConnected();
 }
 
+bool WebSocket::hasGracefullyClosed()
+{
+    return gracefullyClosed;
+}
+
 bool WebSocket::isSelfHostedMessageLoop()
 {
     return selfHostedMessageLoop;
@@ -298,7 +304,7 @@ void WebSocket::enterPollLoop()
 
     while (isConnected())
     {
-        if (tcp->readBytes(&header, 2, 1000) == 2)
+        if (tcp->readBytes(&header, 2, WEBSOCKET_TIMEOUT) == 2)
         {
             parseFrameHeader(header);
         }
@@ -331,7 +337,7 @@ void WebSocket::parseFrameHeader(const WebSocketFrameHeader &header)
 
     if (header.payloadLen == 126)
     {
-        if (tcp->readBytes(&payloadLength, 2, 1000) != 2)
+        if (tcp->readBytes(&payloadLength, 2, WEBSOCKET_TIMEOUT) != 2)
         {
             disconnect();
             return;
@@ -339,7 +345,7 @@ void WebSocket::parseFrameHeader(const WebSocketFrameHeader &header)
     }
     else if (header.payloadLen == 127)
     {
-        if (tcp->readBytes(&payloadLength, 8, 1000) != 8)
+        if (tcp->readBytes(&payloadLength, 8, WEBSOCKET_TIMEOUT) != 8)
         {
             disconnect();
             return;
@@ -353,7 +359,7 @@ void WebSocket::parseFrameHeader(const WebSocketFrameHeader &header)
     uint32_t maskingKey = 0;
     if (header.MASK)
     {
-        if (tcp->readBytes(&maskingKey, 4, 1000) != 4)
+        if (tcp->readBytes(&maskingKey, 4, WEBSOCKET_TIMEOUT) != 4)
         {
             disconnect();
             return;
@@ -361,7 +367,7 @@ void WebSocket::parseFrameHeader(const WebSocketFrameHeader &header)
     }
 
     uint8_t *payload = (uint8_t *)pvPortMalloc(payloadLength);
-    if ((size_t)tcp->readBytes(payload, payloadLength, 5000) != payloadLength)
+    if ((size_t)tcp->readBytes(payload, payloadLength, WEBSOCKET_TIMEOUT) != payloadLength)
     {
         vPortFree(payload);
         disconnect();
@@ -455,6 +461,7 @@ void WebSocket::handleFrame(const WebSocketFrameHeader &header, uint8_t *payload
             {
                 uint16_t statusCode = ntohs(*(uint16_t *)payload);
                 std::string_view reason = std::string_view((char *)(payload + 2), payloadLength - 2);
+                gracefullyClosed = true;
                 close(statusCode, reason);
                 disconnect();
             }

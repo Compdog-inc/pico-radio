@@ -135,6 +135,8 @@ public:
 
     /// @brief Returns true if the client is connected
     bool isConnected();
+    /// @brief Returns true if the client has gracefully closed the connection
+    bool hasGracefullyClosed();
     /// @brief Returns true if the WebSocket client is running the message loop on an internal thread
     bool isSelfHostedMessageLoop();
 
@@ -233,6 +235,8 @@ private:
     WebSocketFrame currentFrame;
     /// @brief True if this client requested a closing of the socket
     bool closeFrameSent = false;
+    /// @brief True if this client gracefully closed the connection
+    bool gracefullyClosed = false;
     /// @brief True if this client should randomly mask its payloads
     bool useMasking;
 };

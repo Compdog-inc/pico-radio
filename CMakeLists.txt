@@ -44,6 +44,14 @@ else()
         set(PICO_RADIO_OPEN 0)
 endif()
 
+if(NOT WEBSOCKET_THREAD_STACK_SIZE)
+        set(WEBSOCKET_THREAD_STACK_SIZE 4096)
+endif()
+
+if(NOT WEBSOCKET_TIMEOUT)
+        set(WEBSOCKET_TIMEOUT 5000)
+endif()
+
 message("Radio hostname is '${PICO_RADIO_HOSTNAME}'.")
 
 if(PICO_RADIO_OPEN)
