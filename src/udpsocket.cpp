@@ -94,6 +94,7 @@ void udp_receive_callback(void *arg, struct udp_pcb *upcb, struct pbuf *p, const
         Datagram datagram(p->payload, p->len, addr, port);
         sock->receiveCallback(sock, &datagram);
     }
+    pbuf_free(p);
 }
 
 UdpSocket::UdpSocket(int port)
