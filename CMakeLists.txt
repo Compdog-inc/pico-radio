@@ -100,5 +100,6 @@ target_include_directories(pico-radio PRIVATE
 target_link_libraries(pico-radio
         pico_cyw43_arch_lwip_sys_freertos
         pico_stdlib
+        pico_rand
         FreeRTOS-Kernel-Heap4 # FreeRTOS kernel and dynamic heap
         )
