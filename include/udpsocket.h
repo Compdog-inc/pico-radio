@@ -2,6 +2,7 @@
 #define _UDP_SOCKET_H_
 
 #include <stdlib.h>
+#include <lwip/netif.h>
 #include <lwip/ip4_addr.h>
 
 /// @brief Represents a UDP payload, together with a target address and por
