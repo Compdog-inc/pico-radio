@@ -83,7 +83,7 @@ void ws_pong(WebSocket *ws, void *args, const uint8_t *payload, size_t payloadLe
         const Guid &guid = (*std::find_if(server->clients.begin(), server->clients.end(), [ws](WsServer::ClientEntry *entry)
                                           { return entry->ws == ws; }))
                                ->guid;
-        server->pongCallback(server, guid, payload, payloadLength);
+        server->pongCallback(server, guid, payload, payloadLength, server->callbackArgs);
     }
 }
 
@@ -97,7 +97,7 @@ void ws_close(WebSocket *ws, void *args, WebSocketStatusCode statusCode, const s
                                ->guid;
         for (int i = 0; i < server->clientDisconnected.Count(); i++)
         {
-            server->clientDisconnected.Get(i)(server, guid, statusCode, reason);
+            server->clientDisconnected.Get(i)(server, guid, statusCode, reason, server->callbackArgs);
         }
     }
 }
@@ -112,7 +112,7 @@ void ws_received(WebSocket *ws, void *args, const WebSocketFrame &frame)
                                ->guid;
         for (int i = 0; i < server->messageReceived.Count(); i++)
         {
-            server->messageReceived.Get(i)(server, guid, frame);
+            server->messageReceived.Get(i)(server, guid, frame, server->callbackArgs);
         }
     }
 }
@@ -191,7 +191,7 @@ void WsServer::handleRawConnection(TcpClient *client)
             return str; });
         std::vector<std::string> requestedProtocolsVec(requestedProtocols.begin(), requestedProtocols.end());
 
-        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : protocolCallback(requestedProtocolsVec);
+        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : protocolCallback(requestedProtocolsVec, callbackArgs);
 
         std::string response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
                                handshakeKey +
@@ -221,7 +221,7 @@ void WsServer::handleRawConnection(TcpClient *client)
         {
             for (int i = 0; i < clientConnected.Count(); i++)
             {
-                clientConnected.Get(i)(this, entry);
+                clientConnected.Get(i)(this, entry, callbackArgs);
             }
         }
 
@@ -233,7 +233,7 @@ void WsServer::handleRawConnection(TcpClient *client)
             {
                 for (int i = 0; i < clientDisconnected.Count(); i++)
                 {
-                    clientDisconnected.Get(i)(this, guid, WebSocketStatusCode::ClosedAbnormally, "Message loop has ungracefully exited."sv);
+                    clientDisconnected.Get(i)(this, guid, WebSocketStatusCode::ClosedAbnormally, "Message loop has ungracefully exited."sv, callbackArgs);
                 }
             }
         }

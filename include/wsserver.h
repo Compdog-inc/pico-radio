@@ -84,23 +84,26 @@ public:
     /// @brief Used internally to start accepting connections
     void acceptConnections();
 
-    typedef std::string (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols);
+    /// @brief Custom args for the WebSocket callbacks, set by the user
+    void *callbackArgs = nullptr;
+
+    typedef std::string (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols, void *args);
     WsServerProtocolCallback protocolCallback = nullptr;
 
     /// @brief Callback for pong frames, contains the WsServer instance, guid and an optional payload
-    typedef void (*WsServerPongCallback)(WsServer *server, const Guid &guid, const uint8_t *payload, size_t payloadLength);
+    typedef void (*WsServerPongCallback)(WsServer *server, const Guid &guid, const uint8_t *payload, size_t payloadLength, void *args);
     /// @brief Called whenever a ping is answered with a pong
     WsServerPongCallback pongCallback = nullptr;
     /// @brief Callback for client connected events, contains the WsServer instance and client entry
-    typedef void (*ClientConnectedCallback)(WsServer *server, const ClientEntry *entry);
+    typedef void (*ClientConnectedCallback)(WsServer *server, const ClientEntry *entry, void *args);
     /// @brief Called whenever a client is connected
     EventHandler<ClientConnectedCallback> clientConnected;
     /// @brief Callback for client disconnected events, contains the WsServer instance, guid and the status code+reason for closing
-    typedef void (*ClientDisconnectedCallback)(WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason);
+    typedef void (*ClientDisconnectedCallback)(WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason, void *args);
     /// @brief Called whenever a close frame is received or connection is interrupted
     EventHandler<ClientDisconnectedCallback> clientDisconnected;
     /// @brief Callback for data frames, contains the WsServer instance, guid and the received frame
-    typedef void (*ClientReceivedCallback)(WsServer *server, const Guid &guid, const WebSocketFrame &frame);
+    typedef void (*ClientReceivedCallback)(WsServer *server, const Guid &guid, const WebSocketFrame &frame, void *args);
     /// @brief Called whenever a data frame is received
     EventHandler<ClientReceivedCallback> messageReceived;
 

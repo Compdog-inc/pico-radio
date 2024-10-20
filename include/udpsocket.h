@@ -92,8 +92,11 @@ public:
     // Internal socket reference
     struct udp_pcb *udp;
 
+    /// @brief Custom args for the udp callbacks, set by the user
+    void *callbackArgs = nullptr;
+
     /// @brief This callback is called whenever the socket receives a Datagram from an address
-    typedef void (*UdpSocketReceiveCallback)(UdpSocket *socket, Datagram *datagram);
+    typedef void (*UdpSocketReceiveCallback)(UdpSocket *socket, Datagram *datagram, void *args);
 
     /// @brief Null by default, set this if you want to handle incoming Datagrams
     UdpSocketReceiveCallback receiveCallback = nullptr;
