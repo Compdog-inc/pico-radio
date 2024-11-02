@@ -14,6 +14,8 @@
 struct Guid
 {
 public:
+    friend struct std::hash<Guid>;
+
     Guid();
     // Creates a new guid from an array of bytes.
     //
@@ -26,10 +28,10 @@ public:
 
     std::string toString();
 
-    bool equals(const Guid &other);
+    bool equals(const Guid &other) const;
 
-    inline bool operator==(const Guid &other) { return equals(other); }
-    inline bool operator!=(const Guid &other) { return !equals(other); }
+    inline bool operator==(const Guid &other) const { return equals(other); }
+    inline bool operator!=(const Guid &other) const { return !equals(other); }
 
 private:
     int32_t _a;
@@ -43,6 +45,38 @@ private:
     uint8_t _i;
     uint8_t _j;
     uint8_t _k;
+};
+
+// https://stackoverflow.com/a/17017281
+template <>
+struct std::hash<Guid>
+{
+    static inline void hash_combine(size_t &val, size_t add)
+    {
+        val = (val ^ (add << 1)) >> 1;
+    };
+
+    std::size_t operator()(const Guid &g) const
+    {
+        using std::hash;
+        using std::size_t;
+        using std::string;
+
+        size_t seed = 0;
+        hash_combine(seed, hash<int32_t>()(g._a));
+        hash_combine(seed, hash<int16_t>()(g._b));
+        hash_combine(seed, hash<int16_t>()(g._c));
+        hash_combine(seed, hash<uint8_t>()(g._d));
+        hash_combine(seed, hash<uint8_t>()(g._e));
+        hash_combine(seed, hash<uint8_t>()(g._f));
+        hash_combine(seed, hash<uint8_t>()(g._g));
+        hash_combine(seed, hash<uint8_t>()(g._h));
+        hash_combine(seed, hash<uint8_t>()(g._i));
+        hash_combine(seed, hash<uint8_t>()(g._j));
+        hash_combine(seed, hash<uint8_t>()(g._k));
+
+        return seed;
+    }
 };
 
 #endif

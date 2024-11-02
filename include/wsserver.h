@@ -87,7 +87,7 @@ public:
     /// @brief Custom args for the WebSocket callbacks, set by the user
     void *callbackArgs = nullptr;
 
-    typedef std::string (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols, void *args);
+    typedef std::string_view (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols, void *args);
     WsServerProtocolCallback protocolCallback = nullptr;
 
     /// @brief Callback for pong frames, contains the WsServer instance, guid and an optional payload

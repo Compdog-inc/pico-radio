@@ -191,7 +191,7 @@ void WsServer::handleRawConnection(TcpClient *client)
             return str; });
         std::vector<std::string> requestedProtocolsVec(requestedProtocols.begin(), requestedProtocols.end());
 
-        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : protocolCallback(requestedProtocolsVec, callbackArgs);
+        std::string acceptedProtocol = protocolCallback == nullptr ? ""s : std::string(protocolCallback(requestedProtocolsVec, callbackArgs));
 
         std::string response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-Websocket-Accept: "s +
                                handshakeKey +

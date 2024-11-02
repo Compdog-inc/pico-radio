@@ -98,7 +98,7 @@ std::string Guid::toString()
     return base64_encode((uint8_t *)this, 16);
 }
 
-bool Guid::equals(const Guid &other)
+bool Guid::equals(const Guid &other) const
 {
     // Compare each of the elements
     if (other._a != _a)
