@@ -40,7 +40,7 @@ int getSO_ERROR(int fd)
     int err = 1;
     socklen_t len = sizeof err;
     if (-1 == getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&err, &len))
-        panic("getSO_ERROR");
+        panic("getSO_ERROR socket: %d\n", fd);
     if (err)
         errno = err; // set errno to the socket SO_ERROR
     return err;
@@ -119,7 +119,8 @@ ssize_t TcpClient::readBytes(void *mem, size_t len, uint32_t timeout)
     recLen = recv(sock, mem, len, 0);
     if (recLen <= 0)
     {
-        connected = false; // socket error means not connected
+        printf("[RADIO] Error reading from socket: error %d\n", errno);
+        disconnect(); // socket error means not connected
         return -1;
     }
     return recLen;
@@ -131,7 +132,8 @@ ssize_t TcpClient::writeBytes(const void *data, size_t size)
     ssize_t res = send(sock, data, size, 0);
     if (res < 0)
     {
-        connected = false; // socket error means not connected
+        printf("[RADIO] Error writing to socket: error %d\n", errno);
+        disconnect(); // socket error means not connected
     }
     return res;
 }

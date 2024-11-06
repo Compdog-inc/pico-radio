@@ -242,7 +242,7 @@ void WsServer::handleRawConnection(TcpClient *client)
                                      [entry](ClientEntry *i)
                                      { return i == entry; }));
         delete entry;
-        delete ws;
+        ws->~WebSocket();
         return;
     }
 

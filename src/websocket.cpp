@@ -186,11 +186,19 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
     return true;
 }
 
+WebSocket::~WebSocket()
+{
+    disconnect();
+}
+
 void WebSocket::disconnect()
 {
-    tcp->disconnect();
-    tcp->~TcpClient();
-    tcp = nullptr;
+    if (tcp != nullptr)
+    {
+        tcp->disconnect();
+        tcp->~TcpClient();
+        tcp = nullptr;
+    }
 }
 
 void WebSocket::close()

@@ -109,6 +109,9 @@ public:
     /// @note There is no DNS resolving, the url is expected to include the IP address of the server
     WebSocket(std::string_view url, std::vector<std::string> protocols);
 
+    /// @brief Closes and disconnects the socket
+    ~WebSocket();
+
     /// @brief Force disconnect the socket
     void disconnect();
 
