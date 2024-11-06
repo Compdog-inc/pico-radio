@@ -374,21 +374,29 @@ void WebSocket::parseFrameHeader(const WebSocketFrameHeader &header)
         }
     }
 
-    uint8_t *payload = (uint8_t *)pvPortMalloc(payloadLength);
-    if ((size_t)tcp->readBytes(payload, payloadLength, WEBSOCKET_TIMEOUT) != payloadLength)
+    uint8_t *payload = nullptr;
+    if (payloadLength > 0)
     {
-        vPortFree(payload);
-        disconnect();
-        return;
-    }
+        payload = (uint8_t *)pvPortMalloc(payloadLength);
+        if (payload == nullptr || (size_t)tcp->readBytes(payload, payloadLength, WEBSOCKET_TIMEOUT) != payloadLength)
+        {
+            vPortFree(payload);
+            disconnect();
+            return;
+        }
 
-    if (header.MASK)
-    {
-        maskPayload(payload, payloadLength, maskingKey);
+        if (header.MASK)
+        {
+            maskPayload(payload, payloadLength, maskingKey);
+        }
     }
 
     handleFrame(header, payload, payloadLength);
-    vPortFree(payload);
+
+    if (payload != nullptr)
+    {
+        vPortFree(payload);
+    }
 }
 
 void WebSocket::maskPayload(uint8_t *payload, size_t payloadLength, uint32_t maskingKey)
@@ -562,11 +570,14 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
         index += sizeof(maskingKey);
     }
 
-    std::memcpy(&buffer[index], payload, payloadLength);
-
-    if (header.MASK)
+    if (payloadLength > 0 && payload != nullptr)
     {
-        maskPayload(&buffer[index], payloadLength, maskingKey);
+        std::memcpy(&buffer[index], payload, payloadLength);
+
+        if (header.MASK)
+        {
+            maskPayload(&buffer[index], payloadLength, maskingKey);
+        }
     }
 
     ssize_t ret = tcp->writeBytes(buffer, frameLength);
@@ -610,15 +621,25 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
         index += sizeof(maskingKey);
     }
 
-    size_t payloadStart = index;
-    std::memcpy(&buffer[index], payload1, payload1Length);
-    index += payload1Length;
-    std::memcpy(&buffer[index], payload2, payload2Length);
-    index += payload2Length;
-
-    if (header.MASK)
+    if ((payload1Length > 0 && payload1 != nullptr) || (payload2Length > 0 && payload2 != nullptr))
     {
-        maskPayload(&buffer[payloadStart], payload1Length + payload2Length, maskingKey);
+        size_t payloadStart = index;
+        if (payload1Length > 0 && payload1 != nullptr)
+        {
+            std::memcpy(&buffer[index], payload1, payload1Length);
+            index += payload1Length;
+        }
+
+        if (payload2Length > 0 && payload2 != nullptr)
+        {
+            std::memcpy(&buffer[index], payload2, payload2Length);
+            index += payload2Length;
+        }
+
+        if (header.MASK)
+        {
+            maskPayload(&buffer[payloadStart], payload1Length + payload2Length, maskingKey);
+        }
     }
 
     ssize_t ret = tcp->writeBytes(buffer, frameLength);
