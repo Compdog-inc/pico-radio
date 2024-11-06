@@ -488,3 +488,8 @@ bool WsServer::send(const Guid &guid, const uint8_t *data, size_t length, WebSoc
 
     return false;
 }
+
+bool WsServer::send(const Guid &guid, const std::vector<uint8_t> &data, WebSocketMessageType messageType)
+{
+    return send(guid, data.data(), data.size(), messageType);
+}

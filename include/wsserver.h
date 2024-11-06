@@ -80,9 +80,16 @@ public:
     /// @param messageType Determines how the binary data is interpreted
     /// @return True on success
     bool send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
+    /// @brief Sends a binary message to a client
+    /// @param guid The guid of the client
+    /// @param data The payload
+    /// @param messageType Determines how the binary data is interpreted
+    /// @return True on success
+    bool send(const Guid &guid, const std::vector<uint8_t> &data, WebSocketMessageType messageType = WebSocketMessageType::Binary);
 
     /// @brief List of currently connected clients
-    std::vector<ClientEntry *> clients;
+    std::vector<ClientEntry *>
+        clients;
 
     /// @brief Used internally to handle a client connection
     void handleRawConnection(TcpClient *client);
