@@ -229,9 +229,9 @@ void WebSocket::close(uint16_t statusCode, const std::string_view &reason)
             1,                                // FIN
             payloadLength >= UINT16_MAX ? 127 : payloadLength >= 126 ? 126
                                                                      : payloadLength,
-            0};
+            useMasking ? 1u : 0u};
 
-        sendFrame(header, (uint8_t *)&statusCode, 2, (uint8_t *)reason.data(), reason.length(), 0);
+        sendFrame(header, (uint8_t *)&statusCode, 2, (uint8_t *)reason.data(), reason.length(), useMasking ? get_rand_32() : 0);
         closeFrameSent = true;
     }
     else
@@ -258,9 +258,9 @@ void WebSocket::ping(const uint8_t *payload, size_t payloadLength)
         1,                     // FIN
         payloadLength >= UINT16_MAX ? 127 : payloadLength >= 126 ? 126
                                                                  : payloadLength,
-        0};
+        useMasking ? 1u : 0u};
 
-    sendFrame(header, payload, payloadLength, 0);
+    sendFrame(header, payload, payloadLength, useMasking ? get_rand_32() : 0);
 }
 
 void WebSocket::pong()
@@ -277,9 +277,9 @@ void WebSocket::pong(const uint8_t *payload, size_t payloadLength)
         1,                     // FIN
         payloadLength >= UINT16_MAX ? 127 : payloadLength >= 126 ? 126
                                                                  : payloadLength,
-        0};
+        useMasking ? 1u : 0u};
 
-    sendFrame(header, payload, payloadLength, 0);
+    sendFrame(header, payload, payloadLength, useMasking ? get_rand_32() : 0);
 }
 
 bool WebSocket::isConnected()
