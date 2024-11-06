@@ -12,6 +12,7 @@
 #include "websocket.h"
 #include <semphr.h>
 #include <vector>
+#include <queue>
 
 /// @brief The maximum number of clients supported by this server
 constexpr int WS_SERVER_MAX_CLIENT_COUNT = 10;
@@ -45,12 +46,16 @@ public:
     void start();
     /// @brief Stop the server
     void stop();
+    /// @brief Starts the dispatch queue. Use when calling websocket functions from unsupported places (like interrupts)
+    void startDispatchQueue();
 
     /// @brief Returns true if the server is listening for new connections
     bool isListening();
+    /// @brief Returns true if the dispatch queue is running
+    bool isDispatchQueueRunning();
     /// @brief Returns true if a client exists with the specified guid and is connected
     bool isClientConnected(const Guid &guid);
-    /// @brief Gracefully disconnectes a client with guid
+    /// @brief Gracefully disconnects a client with guid
     void disconnectClient(const Guid &guid);
 
     /// @brief Sends a ping frame to a client
@@ -83,11 +88,15 @@ public:
     void handleRawConnection(TcpClient *client);
     /// @brief Used internally to start accepting connections
     void acceptConnections();
+    /// @brief Used internally to start the dispatch queue
+    void joinDispatchQueue();
 
     /// @brief Custom args for the WebSocket callbacks, set by the user
     void *callbackArgs = nullptr;
 
+    /// @brief Callback for accepting protocols requested by the client
     typedef std::string_view (*WsServerProtocolCallback)(const std::vector<std::string> &requestedProtocols, void *args);
+    /// @brief Called whenever a client requests protocols
     WsServerProtocolCallback protocolCallback = nullptr;
 
     /// @brief Callback for pong frames, contains the WsServer instance, guid and an optional payload
@@ -114,6 +123,67 @@ private:
     TcpListener *listener;
     /// @brief Handle to the accept connections task
     TaskHandle_t acceptConnectionsTask;
+    /// @brief Handle to the dispatch queue task
+    TaskHandle_t dispatchQueueTask;
+    /// @brief True when the dispatch queue is running
+    bool dispatchQueueRunning;
+
+    enum class DispatchQueueElementType
+    {
+        Disconnect,
+        Ping,
+        PingPayload,
+        SendString,
+        SendBytes
+    };
+
+    struct DispatchQueueElement
+    {
+        DispatchQueueElementType type;
+
+        struct Disconnect
+        {
+            Guid guid;
+        };
+
+        struct Ping
+        {
+            Guid guid;
+        };
+
+        struct PingPaylod
+        {
+            Guid guid;
+            uint8_t *payload;
+            size_t payloadLength;
+        };
+
+        struct SendString
+        {
+            Guid guid;
+            std::string_view data;
+            WebSocketMessageType messageType;
+        };
+
+        struct SendBytes
+        {
+            Guid guid;
+            uint8_t *data;
+            size_t length;
+            WebSocketMessageType messageType;
+        };
+
+        union
+        {
+            Disconnect disconnect;
+            Ping ping;
+            PingPaylod pingPayload;
+            SendString sendString;
+            SendBytes sendBytes;
+        };
+    };
+
+    std::queue<DispatchQueueElement> dispatchQueue;
 };
 
 #endif

@@ -1,4 +1,5 @@
 #include <pico/stdlib.h>
+#include <cstring>
 #include <string>
 #include <FreeRTOS.h>
 #include <task.h>
@@ -30,7 +31,7 @@ WsServer::ClientEntry::ClientEntry(Guid guid, WebSocket *ws, std::string request
 {
 }
 
-WsServer::WsServer(int port) : clients(), port(port)
+WsServer::WsServer(int port) : clients(), port(port), dispatchQueueRunning(false), dispatchQueue()
 {
     clients.reserve(WS_SERVER_MAX_CLIENT_COUNT);
 
@@ -272,6 +273,49 @@ void WsServer::acceptConnections()
     }
 }
 
+void WsServer::joinDispatchQueue()
+{
+    while (isListening() && dispatchQueueRunning)
+    {
+        while (!dispatchQueue.empty())
+        {
+            DispatchQueueElement &elem = dispatchQueue.front();
+            switch (elem.type)
+            {
+            case DispatchQueueElementType::Disconnect:
+                disconnectClient(elem.disconnect.guid);
+                break;
+            case DispatchQueueElementType::Ping:
+                ping(elem.ping.guid);
+                break;
+            case DispatchQueueElementType::PingPayload:
+                ping(elem.pingPayload.guid, elem.pingPayload.payload, elem.pingPayload.payloadLength);
+                if (elem.pingPayload.payload != nullptr)
+                {
+                    vPortFree(elem.pingPayload.payload);
+                }
+                break;
+            case DispatchQueueElementType::SendString:
+                send(elem.sendString.guid, elem.sendString.data, elem.sendString.messageType);
+                break;
+            case DispatchQueueElementType::SendBytes:
+                send(elem.sendBytes.guid, elem.sendBytes.data, elem.sendBytes.length, elem.sendBytes.messageType);
+                if (elem.sendBytes.data != nullptr)
+                {
+                    vPortFree(elem.sendBytes.data);
+                }
+                break;
+            }
+
+            dispatchQueue.pop();
+        }
+
+        vTaskDelay(1);
+    }
+
+    dispatchQueueRunning = false;
+}
+
 void WsServer::start()
 {
     assert(isListening() == false);
@@ -288,11 +332,25 @@ void WsServer::stop()
     listener->stop();
 }
 
+void WsServer::startDispatchQueue()
+{
+    assert(isListening() == true);
+    dispatchQueueRunning = true;
+    xTaskCreate([](void *ins) -> void
+                { ((WsServer *)ins)->joinDispatchQueue(); vTaskDelete(NULL); },
+                "wsserver_dispatch", (uint32_t)WEBSOCKET_THREAD_STACK_SIZE, this, 1, &dispatchQueueTask);
+}
+
 bool WsServer::isListening()
 {
     if (listener == nullptr)
         return false;
     return listener->isOpen();
+}
+
+bool WsServer::isDispatchQueueRunning()
+{
+    return dispatchQueueRunning;
 }
 
 bool WsServer::isClientConnected(const Guid &guid)
@@ -310,6 +368,15 @@ bool WsServer::isClientConnected(const Guid &guid)
 
 void WsServer::disconnectClient(const Guid &guid)
 {
+    if (portCHECK_IF_IN_ISR() && isDispatchQueueRunning())
+    {
+        DispatchQueueElement elem = {};
+        elem.type = DispatchQueueElementType::Disconnect;
+        elem.disconnect = {guid};
+        dispatchQueue.push(elem);
+        return;
+    }
+
     for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
@@ -322,6 +389,15 @@ void WsServer::disconnectClient(const Guid &guid)
 
 void WsServer::ping(const Guid &guid)
 {
+    if (portCHECK_IF_IN_ISR() && isDispatchQueueRunning())
+    {
+        DispatchQueueElement elem = {};
+        elem.type = DispatchQueueElementType::Ping;
+        elem.ping = {guid};
+        dispatchQueue.push(elem);
+        return;
+    }
+
     for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
@@ -334,6 +410,23 @@ void WsServer::ping(const Guid &guid)
 
 void WsServer::ping(const Guid &guid, const uint8_t *payload, size_t payloadLength)
 {
+    if (portCHECK_IF_IN_ISR() && isDispatchQueueRunning())
+    {
+        DispatchQueueElement elem = {};
+        elem.type = DispatchQueueElementType::PingPayload;
+        uint8_t *newPayload = nullptr;
+
+        if (payload != nullptr && payloadLength > 0)
+        {
+            newPayload = (uint8_t *)pvPortMalloc(payloadLength);
+            std::memcpy(newPayload, payload, payloadLength);
+        }
+
+        elem.pingPayload = {guid, newPayload, payloadLength};
+        dispatchQueue.push(elem);
+        return;
+    }
+
     for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
@@ -346,6 +439,15 @@ void WsServer::ping(const Guid &guid, const uint8_t *payload, size_t payloadLeng
 
 bool WsServer::send(const Guid &guid, std::string_view data, WebSocketMessageType messageType)
 {
+    if (portCHECK_IF_IN_ISR() && isDispatchQueueRunning())
+    {
+        DispatchQueueElement elem = {};
+        elem.type = DispatchQueueElementType::SendString;
+        elem.sendString = {guid, data, messageType};
+        dispatchQueue.push(elem);
+        return true;
+    }
+
     for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
@@ -359,6 +461,23 @@ bool WsServer::send(const Guid &guid, std::string_view data, WebSocketMessageTyp
 
 bool WsServer::send(const Guid &guid, const uint8_t *data, size_t length, WebSocketMessageType messageType)
 {
+    if (portCHECK_IF_IN_ISR() && isDispatchQueueRunning())
+    {
+        DispatchQueueElement elem = {};
+        elem.type = DispatchQueueElementType::SendBytes;
+        uint8_t *newPayload = nullptr;
+
+        if (data != nullptr && length > 0)
+        {
+            newPayload = (uint8_t *)pvPortMalloc(length);
+            std::memcpy(newPayload, data, length);
+        }
+
+        elem.sendBytes = {guid, newPayload, length, messageType};
+        dispatchQueue.push(elem);
+        return true;
+    }
+
     for (size_t i = 0; i < clients.size(); i++)
     {
         if (clients[i]->guid == guid)
