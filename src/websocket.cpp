@@ -13,6 +13,14 @@
 #include "guid.h"
 #include "sha1.hpp"
 
+#if __BIG_ENDIAN__
+#define htonll(x) (x)
+#define ntohll(x) (x)
+#else
+#define htonll(x) (((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
+#define ntohll(x) (((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
+#endif
+
 using namespace std::literals;
 
 static SemaphoreHandle_t sha1_mutex = NULL;
@@ -345,19 +353,25 @@ void WebSocket::parseFrameHeader(const WebSocketFrameHeader &header)
 
     if (header.payloadLen == 126)
     {
-        if (tcp->readBytes(&payloadLength, 2, WEBSOCKET_TIMEOUT) != 2)
+        uint16_t len;
+        if (tcp->readBytes(&len, 2, WEBSOCKET_TIMEOUT) != 2)
         {
             disconnect();
             return;
         }
+
+        payloadLength = ntohs(len);
     }
     else if (header.payloadLen == 127)
     {
-        if (tcp->readBytes(&payloadLength, 8, WEBSOCKET_TIMEOUT) != 8)
+        uint64_t len;
+        if (tcp->readBytes(&len, 8, WEBSOCKET_TIMEOUT) != 8)
         {
             disconnect();
             return;
         }
+
+        payloadLength = ntohll(len);
     }
     else
     {
@@ -532,7 +546,89 @@ bool WebSocket::send(const uint8_t *data, size_t length, WebSocketMessageType me
                                                    : length,
         useMasking ? 1u : 0u};
 
-    return sendFrame(header, data, length, useMasking ? get_rand_32() : 0);
+    size_t packetSize = 2 +
+                        (header.payloadLen == 127 ? sizeof(uint64_t) : header.payloadLen == 126 ? sizeof(uint16_t)
+                                                                                                : 0) +
+                        (header.MASK ? sizeof(uint32_t) : 0) +
+                        length;
+
+    if (packetSize > WEBSOCKET_MAX_PACKET_SIZE)
+    {
+        // fragment packet
+        size_t fragmentHeaderSize = 2 +
+                                    ((WEBSOCKET_MAX_PACKET_SIZE - 8) >= UINT16_MAX ? sizeof(uint64_t) : (WEBSOCKET_MAX_PACKET_SIZE - 6) >= 126 ? sizeof(uint16_t)
+                                                                                                                                               : 0) +
+                                    (header.MASK ? sizeof(uint32_t) : 0);
+        size_t fragmentPayloadLength = WEBSOCKET_MAX_PACKET_SIZE - fragmentHeaderSize;
+
+        size_t bytesLeft = length;
+        while (bytesLeft > 0)
+        {
+            if (bytesLeft >= fragmentPayloadLength)
+            {
+                // standard fragment
+                if (bytesLeft == fragmentPayloadLength)
+                {
+                    // final fragment in series
+                    header.opcode = WebSocketOpCode::ContinuationFrame;
+                    header.FIN = 1;
+                    header.payloadLen = fragmentPayloadLength >= UINT16_MAX ? 127 : fragmentPayloadLength >= 126 ? 126
+                                                                                                                 : fragmentPayloadLength;
+                    return sendFrame(header, &data[length - bytesLeft], fragmentPayloadLength, useMasking ? get_rand_32() : 0);
+                }
+                else if (bytesLeft == length)
+                {
+                    // first fragment in series
+                    header.FIN = 0;
+                    header.payloadLen = fragmentPayloadLength >= UINT16_MAX ? 127 : fragmentPayloadLength >= 126 ? 126
+                                                                                                                 : fragmentPayloadLength;
+                    if (!sendFrame(header, data, fragmentPayloadLength, useMasking ? get_rand_32() : 0))
+                    {
+                        return false;
+                    }
+
+                    bytesLeft -= fragmentPayloadLength;
+                }
+                else
+                {
+                    // middle fragment in series
+                    header.FIN = 0;
+                    header.opcode = WebSocketOpCode::ContinuationFrame;
+                    header.payloadLen = fragmentPayloadLength >= UINT16_MAX ? 127 : fragmentPayloadLength >= 126 ? 126
+                                                                                                                 : fragmentPayloadLength;
+                    if (!sendFrame(header, data, fragmentPayloadLength, useMasking ? get_rand_32() : 0))
+                    {
+                        return false;
+                    }
+
+                    bytesLeft -= fragmentPayloadLength;
+                }
+            }
+            else
+            {
+                // left over fragment bytes
+
+                // recalculate fragment header size with new packet size
+                fragmentHeaderSize = 2 +
+                                     (bytesLeft >= UINT16_MAX ? sizeof(uint64_t) : bytesLeft >= 126 ? sizeof(uint16_t)
+                                                                                                    : 0) +
+                                     (header.MASK ? sizeof(uint32_t) : 0);
+
+                header.opcode = WebSocketOpCode::ContinuationFrame;
+                header.FIN = 1;
+                header.payloadLen = bytesLeft >= UINT16_MAX ? 127 : bytesLeft >= 126 ? 126
+                                                                                     : bytesLeft;
+                return sendFrame(header, &data[length - bytesLeft], bytesLeft, useMasking ? get_rand_32() : 0);
+            }
+        }
+
+        return true;
+    }
+    else
+    {
+        // fits in single packet
+        return sendFrame(header, data, length, useMasking ? get_rand_32() : 0);
+    }
 }
 
 bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *payload, size_t payloadLength, uint32_t maskingKey)
@@ -542,7 +638,7 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
         return false;
     }
 
-    size_t frameLength = 2 /* header */ + (header.payloadLen == 257 ? 8 : header.payloadLen == 256 ? 2
+    size_t frameLength = 2 /* header */ + (header.payloadLen == 127 ? 8 : header.payloadLen == 126 ? 2
                                                                                                    : 0) +
                          (header.MASK ? 4 : 0) /* masking key */ + payloadLength;
 
@@ -551,15 +647,15 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
     std::memcpy(&buffer[index], &header, 2);
     index += 2;
 
-    if (header.payloadLen == 257)
+    if (header.payloadLen == 127)
     {
-        uint64_t len = (uint64_t)payloadLength;
+        uint64_t len = htonll((uint64_t)payloadLength);
         std::memcpy(&buffer[index], &len, sizeof(len));
         index += sizeof(len);
     }
-    else if (header.payloadLen == 256)
+    else if (header.payloadLen == 126)
     {
-        uint16_t len = (uint16_t)payloadLength;
+        uint16_t len = htons((uint16_t)payloadLength);
         std::memcpy(&buffer[index], &len, sizeof(len));
         index += sizeof(len);
     }
@@ -593,7 +689,7 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
         return false;
     }
 
-    size_t frameLength = 2 /* header */ + (header.payloadLen == 257 ? 8 : header.payloadLen == 256 ? 2
+    size_t frameLength = 2 /* header */ + (header.payloadLen == 127 ? 8 : header.payloadLen == 126 ? 2
                                                                                                    : 0) +
                          (header.MASK ? 4 : 0) /* masking key */ + payload1Length + payload2Length;
 
@@ -602,15 +698,15 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
     std::memcpy(&buffer[index], &header, 2);
     index += 2;
 
-    if (header.payloadLen == 257)
+    if (header.payloadLen == 127)
     {
-        uint64_t len = (uint64_t)(payload1Length + payload2Length);
+        uint64_t len = htonll((uint64_t)(payload1Length + payload2Length));
         std::memcpy(&buffer[index], &len, sizeof(len));
         index += sizeof(len);
     }
-    else if (header.payloadLen == 256)
+    else if (header.payloadLen == 126)
     {
-        uint16_t len = (uint16_t)(payload1Length + payload2Length);
+        uint16_t len = htons((uint16_t)(payload1Length + payload2Length));
         std::memcpy(&buffer[index], &len, sizeof(len));
         index += sizeof(len);
     }

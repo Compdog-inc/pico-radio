@@ -9,6 +9,8 @@
 #include <vector>
 #include "tcpclient.h"
 
+static constexpr size_t WEBSOCKET_MAX_PACKET_SIZE = TCP_MSS;
+
 /// @brief Supported message formats for websocket communication
 enum class WebSocketMessageType
 {
