@@ -50,7 +50,7 @@ WsServer::~WsServer()
     }
 
     listener->stop();
-    listener->~TcpListener();
+    delete listener;
 }
 
 struct _handleRawConnection_taskargs
@@ -124,7 +124,7 @@ void WsServer::handleRawConnection(TcpClient *client)
     if (client->readBytes(methodBuf, 4, WEBSOCKET_TIMEOUT) != 4 || methodBuf[0] != 'G' || methodBuf[1] != 'E' || methodBuf[2] != 'T' || methodBuf[3] != ' ')
     {
         client->disconnect();
-        client->~TcpClient();
+        delete client;
         return;
     }
 
@@ -175,7 +175,7 @@ void WsServer::handleRawConnection(TcpClient *client)
     if (!foundConnectionHeader || !foundUpgradeHeader || clientKey.empty() || clients.size() == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
     {
         stream->writeString("HTTP/1.1 400 Bad Request\r\n\r\n"sv);
-        stream->~TextStream();
+        delete stream;
     }
     else
     {
@@ -206,7 +206,7 @@ void WsServer::handleRawConnection(TcpClient *client)
         response.append("\r\n"sv);
 
         stream->writeString(response);
-        stream->~TextStream();
+        delete stream;
 
         Guid guid = Guid::NewGuid();
         WebSocket *ws = new WebSocket(client);
@@ -243,12 +243,12 @@ void WsServer::handleRawConnection(TcpClient *client)
                                      [entry](ClientEntry *i)
                                      { return i == entry; }));
         delete entry;
-        ws->~WebSocket();
+        delete ws;
         return;
     }
 
     client->disconnect();
-    client->~TcpClient();
+    delete client;
 }
 
 void WsServer::acceptConnections()

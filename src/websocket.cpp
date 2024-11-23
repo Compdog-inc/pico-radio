@@ -118,7 +118,7 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
 
     if (!stream->writeString(req))
     {
-        stream->~TextStream();
+        delete stream;
         return false;
     }
 
@@ -129,7 +129,7 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
     std::string status = std::string((*iter).begin(), (*iter).end());
     if (status != "101"sv)
     {
-        stream->~TextStream();
+        delete stream;
         return false;
     }
 
@@ -173,7 +173,7 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
 
     if (!foundConnectionHeader || !foundUpgradeHeader || acceptKey.empty())
     {
-        stream->~TextStream();
+        delete stream;
         return false;
     }
 
@@ -184,13 +184,13 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
 
     if (acceptKey != handshakeKey)
     {
-        stream->~TextStream();
+        delete stream;
         return false;
     }
 
     serverProtocol = acceptedProtocol;
 
-    stream->~TextStream();
+    delete stream;
     return true;
 }
 
@@ -204,7 +204,7 @@ void WebSocket::disconnect()
     if (tcp != nullptr)
     {
         tcp->disconnect();
-        tcp->~TcpClient();
+        delete tcp;
         tcp = nullptr;
     }
 }
