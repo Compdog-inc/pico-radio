@@ -9,6 +9,7 @@ A network radio library for the Raspberry PI Pico W
 - TextStream class for text based interaction with TCP clients
 - UDP socket implementation with both connect and bind modes and support for broadcasting on the local network interface
 - Event based WebSocket client/server implementation with nearly complete RFC 6455 specification
+- Full NetworkTables v4.1 (NT4) client/server implementation
 
 ### Config Options (CMake)
 
