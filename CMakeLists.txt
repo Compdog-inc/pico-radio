@@ -90,6 +90,7 @@ add_library(pico-radio STATIC
         src/guid.cpp
         src/websocket.cpp
         src/wsserver.cpp
+        src/nt/ntinstance.cpp
         )
 
 target_include_directories(pico-radio PRIVATE

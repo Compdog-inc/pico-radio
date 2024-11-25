@@ -156,6 +156,11 @@ public:
     /// @param messageType Determines how to interpret the binary message
     /// @return True if succeeded
     bool send(const uint8_t *data, size_t length, WebSocketMessageType messageType = WebSocketMessageType::Binary);
+    /// @brief Send a binary message to the server/client
+    /// @param data The binary payload to send
+    /// @param messageType Determines how to interpret the binary message
+    /// @return True if succeeded
+    bool send(const std::vector<uint8_t> &data, WebSocketMessageType messageType = WebSocketMessageType::Binary);
 
     /// @brief Runs the WebSocket message loop on the calling thread, blocking execution until the socket is closed
     void joinMessageLoop();

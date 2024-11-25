@@ -520,6 +520,11 @@ bool WebSocket::send(std::string_view data, WebSocketMessageType messageType)
     return send((const uint8_t *)data.data(), data.length(), messageType);
 }
 
+bool WebSocket::send(const std::vector<uint8_t> &data, WebSocketMessageType messageType)
+{
+    return send(data.data(), data.size(), messageType);
+}
+
 bool WebSocket::send(const uint8_t *data, size_t length, WebSocketMessageType messageType)
 {
     assert(isConnected() == true);
