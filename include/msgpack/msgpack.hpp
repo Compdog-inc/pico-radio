@@ -540,7 +540,7 @@ namespace msgpack
       }
     }
 
-    void Packer::pack_type(const std::nullptr_t & /*value*/)
+    void pack_type(const std::nullptr_t & /*value*/)
     {
       serialized_object.emplace_back(nil);
     }
