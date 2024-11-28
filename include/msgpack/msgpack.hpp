@@ -15,6 +15,9 @@
 #include <bitset>
 #include <system_error>
 #include <unordered_map>
+#include <string>
+#include <concepts>
+#include <type_traits>
 
 namespace msgpack
 {
@@ -176,48 +179,70 @@ namespace msgpack
   {
   };
 
+  template <typename T>
+  struct NVPValue
+  {
+    std::string key;
+    T value;
+  };
+
+  template <typename T>
+  concept IsNVPValue = requires(T t) {
+    { t.key } -> std::convertible_to<std::string>; // Check 'key' is convertible to std::string
+    { t.value };                                   // Check it has 'value'
+  };
+
+  // Helper to create an NVPValue
+  template <typename T>
+  constexpr auto make_nvp(std::string field_name, T &&field_value)
+  {
+    return msgpack::NVPValue<std::decay_t<T>>{field_name, std::forward<T>(field_value)};
+  }
+
   template <bool nvp_packing = false>
   class Packer
   {
   public:
     template <class... Types>
+      requires(nvp_packing && (IsNVPValue<Types> && ...))
     void operator()(const Types &...args)
     {
-      if constexpr (nvp_packing)
+      std::map<std::string, skip> placeholder{};
+      const std::size_t n = sizeof...(Types);
+      for (auto i = 0U; i < n; i++)
       {
-        std::map<std::string, skip> placeholder{};
-        const std::size_t n = sizeof...(Types);
-        for (auto i = 0U; i < n; i++)
-        {
-          placeholder[std::to_string(i)];
-        }
-        pack_type(placeholder);
-        (pack_nvp(std::forward<const Types &>(args)), ...);
+        placeholder[std::to_string(i)];
       }
-      else
-      {
-        (pack_type(std::forward<const Types &>(args)), ...);
-      }
+      pack_type(placeholder);
+      (pack_nvp(std::forward<const Types &>(args)), ...);
     }
 
     template <class... Types>
+      requires(!nvp_packing)
+    void operator()(const Types &...args)
+    {
+      (pack_type(std::forward<const Types &>(args)), ...);
+    }
+
+    template <class... Types>
+      requires(nvp_packing && (IsNVPValue<Types> && ...))
     void process(const Types &...args)
     {
-      if constexpr (nvp_packing)
+      std::map<std::string, skip> placeholder{};
+      const std::size_t n = sizeof...(Types);
+      for (auto i = 0U; i < n; i++)
       {
-        std::map<std::string, skip> placeholder{};
-        const std::size_t n = sizeof...(Types);
-        for (auto i = 0U; i < n; i++)
-        {
-          placeholder[std::to_string(i)];
-        }
-        pack_type(placeholder);
-        (pack_nvp(std::forward<const Types &>(args)), ...);
+        placeholder[std::to_string(i)];
       }
-      else
-      {
-        (pack_type(std::forward<const Types &>(args)), ...);
-      }
+      pack_type(placeholder);
+      (pack_nvp(std::forward<const Types &>(args)), ...);
+    }
+
+    template <class... Types>
+      requires(!nvp_packing)
+    void process(const Types &...args)
+    {
+      (pack_type(std::forward<const Types &>(args)), ...);
     }
 
     void pack_array_header(std::size_t size)
@@ -261,14 +286,13 @@ namespace msgpack
 
   private:
     std::vector<uint8_t> serialized_object{};
-    std::size_t current_index{};
 
     template <typename T>
-    void pack_nvp(const T &value)
+      requires IsNVPValue<T>
+    void pack_nvp(const T &nvp)
     {
-      pack_type(std::to_string(current_index));
-      pack_type(value);
-      current_index++;
+      pack_type(nvp.key);
+      pack_type(nvp.value);
     }
 
     template <class T>
@@ -1704,5 +1728,7 @@ namespace msgpack
     return nvp_unpack<UnpackableObject>(data.data(), data.size(), ec);
   }
 }
+
+#define nvp(x) msgpack::make_nvp(#x, x)
 
 #endif // CPPACK_PACKER_HPP
