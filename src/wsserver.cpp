@@ -400,7 +400,7 @@ void WsServer::ping(const Guid &guid)
 
     for (size_t i = 0; i < clients.size(); i++)
     {
-        if (clients[i]->guid == guid)
+        if (clients[i]->guid == guid && clients[i]->ws->isConnected())
         {
             clients[i]->ws->ping();
             return;
@@ -429,7 +429,7 @@ void WsServer::ping(const Guid &guid, const uint8_t *payload, size_t payloadLeng
 
     for (size_t i = 0; i < clients.size(); i++)
     {
-        if (clients[i]->guid == guid)
+        if (clients[i]->guid == guid && clients[i]->ws->isConnected())
         {
             clients[i]->ws->ping(payload, payloadLength);
             return;
@@ -450,7 +450,7 @@ bool WsServer::send(const Guid &guid, std::string_view data, WebSocketMessageTyp
 
     for (size_t i = 0; i < clients.size(); i++)
     {
-        if (clients[i]->guid == guid)
+        if (clients[i]->guid == guid && clients[i]->ws->isConnected())
         {
             return clients[i]->ws->send(data, messageType);
         }
@@ -480,7 +480,7 @@ bool WsServer::send(const Guid &guid, const uint8_t *data, size_t length, WebSoc
 
     for (size_t i = 0; i < clients.size(); i++)
     {
-        if (clients[i]->guid == guid)
+        if (clients[i]->guid == guid && clients[i]->ws->isConnected())
         {
             return clients[i]->ws->send(data, length, messageType);
         }

@@ -10,7 +10,7 @@ include("$ENV{FREERTOS_KERNEL_PATH}\\portable\\ThirdParty\\GCC\\RP2040\\FreeRTOS
 
 project(pico-radio C CXX ASM)
 set(CMAKE_C_STANDARD 17)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 if(NOT PICO_CYW43_SUPPORTED)
     message(FATAL_ERROR "The pico-radio library requires CYW43 support!")
