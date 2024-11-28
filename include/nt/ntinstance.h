@@ -120,7 +120,7 @@ private:
         template <class T>
         void pack(T &pack)
         {
-            pack(periodic, all, topicsonly, prefix);
+            pack(nvp(periodic), nvp(all), nvp(topicsonly), nvp(prefix));
         }
     };
 
@@ -150,7 +150,40 @@ private:
         template <class T>
         void pack(T &pack)
         {
-            pack(uid, topics, options);
+            pack(nvp(uid), nvp(topics), nvp(options));
+        }
+    };
+
+    struct TopicSubscription
+    {
+        std::string client;
+        int32_t subuid;
+        SubscriptionOptions options;
+
+        TopicSubscription(std::string client, int32_t subuid, SubscriptionOptions options) : client(client), subuid(subuid), options(options)
+        {
+        }
+
+        template <class T>
+        void pack(T &pack)
+        {
+            pack(nvp(client), nvp(subuid), nvp(options));
+        }
+    };
+
+    struct TopicPublisher
+    {
+        std::string client;
+        int32_t pubuid;
+
+        TopicPublisher(std::string client, int32_t pubuid) : client(client), pubuid(pubuid)
+        {
+        }
+
+        template <class T>
+        void pack(T &pack)
+        {
+            pack(nvp(client), nvp(pubuid));
         }
     };
 
@@ -162,7 +195,7 @@ private:
         template <class T>
         void pack(T &pack)
         {
-            pack(uid, topic);
+            pack(nvp(uid), nvp(topic));
         }
     };
 
@@ -190,11 +223,15 @@ private:
     {
         Guid guid;
         std::string name;
+
         std::unordered_map<int32_t, Subscription *> subscriptions;
         std::unordered_map<int32_t, Publisher *> publishers;
         std::unordered_map<std::string, ClientTopicData> topicData;
+
         int64_t nextTopicIdAssigned = 0;
+
         std::string textCache = {};
+        std::vector<uint8_t> binaryCache = {};
     };
 
     std::unordered_map<std::string, Topic *> topics = {};
@@ -205,7 +242,10 @@ private:
     inline Topic *getOrCreateTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT)
     {
         if (topics.contains(name))
-            return topics[name];
+        {
+            Topic *topic = topics[name];
+            return topic;
+        }
         else
         {
             Topic *topic = new Topic(name, value);
@@ -215,7 +255,8 @@ private:
         }
     }
 
-    bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name);
+    bool isSubscribed(Subscription *subscription, std::string name);
+    bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, Subscription **out_subscription = nullptr);
 
     bool announceTopic(const Guid &guid, const Topic *topic);
     bool announceTopic(const Topic *topic);
@@ -226,6 +267,8 @@ private:
     void publishInitialValues(const Guid &guid);
 
     bool publishTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT);
+
+    size_t nextClientWithName(std::string_view name);
 
     void flush(ClientData *client)
     {
@@ -247,6 +290,8 @@ private:
     void updateServerPubMetaTopic();
     void updateClientSubMetaTopic(const Guid &guid);
     void updateClientPubMetaTopic(const Guid &guid);
+    void updateTopicSubMetaTopic(std::string name);
+    void updateTopicPubMetaTopic(std::string name);
 };
 
 #endif
