@@ -132,7 +132,25 @@ std::string serializeDataType(NTDataType type)
     }
 }
 
-void NTDataValue::unpack(msgpack::Unpacker &unpacker)
+NTDataType NTDataValue::getAPIType() const
+{
+    if (type == NTDataType::UInt)
+        return NTDataType::Int;
+
+    if (type == NTDataType::Json)
+        return NTDataType::Str;
+
+    if (type == NTDataType::Raw)
+        return NTDataType::Bin;
+    if (type == NTDataType::Msgpack)
+        return NTDataType::Bin;
+    if (type == NTDataType::Protobuf)
+        return NTDataType::Bin;
+
+    return type;
+}
+
+void NTDataValue::unpack(msgpack::Unpacker<false> &unpacker)
 {
     switch (type)
     {
@@ -149,9 +167,13 @@ void NTDataValue::unpack(msgpack::Unpacker &unpacker)
         unpacker.process(f32);
         break;
     case NTDataType::Str:
+    case NTDataType::Json:
         unpacker.process(str);
         break;
     case NTDataType::Bin:
+    case NTDataType::Raw:
+    case NTDataType::Msgpack:
+    case NTDataType::Protobuf:
         unpacker.process(bin);
         break;
     case NTDataType::UInt:
@@ -177,7 +199,7 @@ void NTDataValue::unpack(msgpack::Unpacker &unpacker)
     }
 }
 
-void NTDataValue::pack(msgpack::Packer &packer)
+void NTDataValue::pack(msgpack::Packer<false> &packer) const
 {
     switch (type)
     {
@@ -194,9 +216,13 @@ void NTDataValue::pack(msgpack::Packer &packer)
         packer.process(f32);
         break;
     case NTDataType::Str:
+    case NTDataType::Json:
         packer.process(str);
         break;
     case NTDataType::Bin:
+    case NTDataType::Raw:
+    case NTDataType::Msgpack:
+    case NTDataType::Protobuf:
         packer.process(bin);
         break;
     case NTDataType::UInt:
@@ -222,7 +248,7 @@ void NTDataValue::pack(msgpack::Packer &packer)
     }
 }
 
-NTDataValue::NTDataValue(NTDataType type, msgpack::Unpacker &unpacker) : type(type)
+NTDataValue::NTDataValue(NTDataType type, msgpack::Unpacker<false> &unpacker) : type(type)
 {
     if (type == NTDataType::Int && unpacker.is_next_unsigned())
         this->type = NTDataType::UInt;
@@ -234,7 +260,9 @@ NTDataValue::NTDataValue(double f64) : type(NTDataType::Float64), f64(f64) {}
 NTDataValue::NTDataValue(int64_t i) : type(NTDataType::Int), i(i) {}
 NTDataValue::NTDataValue(float f32) : type(NTDataType::Float32), f32(f32) {}
 NTDataValue::NTDataValue(std::string str) : type(NTDataType::Str), str(str) {}
+NTDataValue::NTDataValue(NTDataType type, std::string str) : type(type), str(str) {}
 NTDataValue::NTDataValue(std::vector<uint8_t> bin) : type(NTDataType::Bin), bin(bin) {}
+NTDataValue::NTDataValue(NTDataType type, std::vector<uint8_t> bin) : type(type), bin(bin) {}
 NTDataValue::NTDataValue(uint64_t ui) : type(NTDataType::UInt), ui(ui) {}
 NTDataValue::NTDataValue(std::list<bool> bArray) : type(NTDataType::BoolArray), bArray(bArray) {}
 NTDataValue::NTDataValue(std::list<double> f64Array) : type(NTDataType::Float64Array), f64Array(f64Array) {}
@@ -311,21 +339,13 @@ void NetworkTableInstance::startClient(std::string_view url)
     client->callbackArgs = this;
 }
 
-static const std::vector<uint8_t> _clients = std::vector<uint8_t>{
-    0x91, 0x82, 0xA2, 0x69, 0x64, 0xA5, 0x67, 0x6C, 0x61, 0x73, 0x73, 0xA4, 0x63, 0x6F, 0x6E, 0x6E, 0xB1, 0x31, 0x30, 0x2E, 0x36, 0x37, 0x2E, 0x33, 0x31, 0x2E, 0x31, 0x36, 0x3A, 0x35, 0x31, 0x38, 0x32, 0x33};
-static const std::vector<uint8_t> glass = std::vector<uint8_t>{0x92, 0x83, 0xA3, 0x75, 0x69, 0x64, 0xCE, 0x16, 0x00, 0x00, 0x00, 0xA6, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x73, 0x92, 0xA0, 0xA1, 0x24, 0xA7, 0x6F, 0x70, 0x74, 0x69, 0x6F, 0x6E, 0x73, 0x81, 0xA6, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0xC3, 0x83, 0xA3, 0x75, 0x69, 0x64, 0xCE, 0x16, 0x00, 0x00, 0x01, 0xA6, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x73, 0x91, 0xA0, 0xA7, 0x6F, 0x70, 0x74, 0x69, 0x6F, 0x6E, 0x73, 0x82, 0xAA, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x73, 0x6F, 0x6E, 0x6C, 0x79, 0xC3, 0xA6, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0xC3};
-static const std::vector<uint8_t> serverSub = std::vector<uint8_t>{0x92, 0x83, 0xA3, 0x75, 0x69, 0x64, 0xCE, 0x16, 0x00, 0x00, 0x00, 0xA6, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x73, 0x92, 0xA0, 0xA1, 0x24, 0xA7, 0x6F, 0x70, 0x74, 0x69, 0x6F, 0x6E, 0x73, 0x81, 0xA6, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0xC3, 0x83, 0xA3, 0x75, 0x69, 0x64, 0xCE, 0x16, 0x00, 0x00, 0x01, 0xA6, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x73, 0x91, 0xA0, 0xA7, 0x6F, 0x70, 0x74, 0x69, 0x6F, 0x6E, 0x73, 0x82, 0xAA, 0x74, 0x6F, 0x70, 0x69, 0x63, 0x73, 0x6F, 0x6E, 0x6C, 0x79, 0xC3, 0xA6, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0xC3};
-
 void NetworkTableInstance::startServer()
 {
     stop();
     serverTimeOffset = 0;
     server = new WsServer(NT4_SERVER_PORT);
     server->callbackArgs = this;
-
-    topics["$clients"s] = new Topic("$clients"s, {_clients});
-    topics["$clientsub$glass"s] = new Topic("$clientsub$glass"s, {glass});
-    topics["$serversub"s] = new Topic("$serversub"s, {serverSub});
+    thisClient = {};
 
     // Accept NT_PROTOCOL only
     server->protocolCallback = [](const std::vector<std::string> &requestedProtocols, void *args) -> std::string_view
@@ -339,15 +359,21 @@ void NetworkTableInstance::startServer()
     server->clientConnected.Add([](WsServer *server, const WsServer::ClientEntry *entry, void *args)
                                 { NetworkTableInstance *inst = (NetworkTableInstance *)args; 
                                 ClientData* data = new ClientData();
-                                data->name = entry->requestedPath;
+                                data->guid = entry->guid;
+                                std::size_t nameStart = entry->requestedPath.find("/nt/"sv) + 4;
+                                data->name = entry->requestedPath.substr(nameStart);
                                 data->publishers = {};
                                 data->subscriptions = {};
-                                data->topicIds = {
-                                    {"$clients"s, 0},
-                                    {"$clientsub$glass"s, 1},
-                                    {"$serversub"s, 2}
-                                };
-                                inst->clients[entry->guid] = data; });
+                                data->topicData = {};
+                                inst->clients[entry->guid] = data;
+                                
+                                inst->publishTopic("$clientsub$"s + data->name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}));
+                                inst->publishTopic("$clientpub$"s + data->name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}));
+                                inst->updateClientsMetaTopic();
+                                inst->updateClientSubMetaTopic(entry->guid);
+                                inst->updateClientPubMetaTopic(entry->guid);
+                                inst->flush(data);
+                                inst->publishInitialValues(entry->guid); });
 
     server->clientDisconnected.Add([](WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason, void *args)
                                    { NetworkTableInstance *inst = (NetworkTableInstance *)args;
@@ -357,7 +383,8 @@ void NetworkTableInstance::startServer()
             delete o.second;
         for (auto o : data->publishers)
             delete o.second;
-        delete data; });
+        delete data; 
+        inst->updateClientsMetaTopic(); });
 
     server->messageReceived.Add([](WsServer *server, const Guid &guid, const WebSocketFrame &frame, void *args)
                                 {
@@ -369,6 +396,16 @@ void NetworkTableInstance::startServer()
 
     server->start();
     networkMode = NetworkMode::Server;
+
+    publishTopic("$clients"s, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}));
+    publishTopic("$serversub"s, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}));
+    publishTopic("$serverpub"s, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}));
+
+    updateClientsMetaTopic();
+    updateServerSubMetaTopic();
+    updateServerPubMetaTopic();
+
+    publishTopic("/SmartDashboard/testvalue", {(int64_t)5});
 }
 
 void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &frame)
@@ -379,9 +416,12 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
     {
         printf("%.*s\n", frame.payloadLength, frame.payload);
 
+        std::vector<std::string> topics{};
+
         auto unpacker = json::Unpacker();
         unpacker.set_data(frame.payload, frame.payloadLength);
         unpacker.unpack_array();
+        json::DataType nextType;
 
         do
         {
@@ -397,7 +437,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                 if (networkMode != NetworkMode::Server)
                     break;
 
-                std::vector<std::string> topics{};
+                topics.clear();
                 int32_t subuid;
                 SubscriptionOptions options = SubscriptionOptions_DEFAULT; // TODO: replace default with already set options (if exist)
                 for (int i = 0; i < 3; i++)
@@ -451,14 +491,18 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
                 if (!clients[guid]->subscriptions[subuid])
                 {
-                    clients[guid]->subscriptions[subuid] = new Subscription();
+                    clients[guid]->subscriptions[subuid] = new Subscription(subuid, topics, options);
+                }
+                else
+                {
+                    clients[guid]->subscriptions[subuid]->uid = subuid;
+                    clients[guid]->subscriptions[subuid]->topics = topics;
+                    clients[guid]->subscriptions[subuid]->options = options;
                 }
 
-                clients[guid]->subscriptions[subuid]->uid = subuid;
-                clients[guid]->subscriptions[subuid]->topics = topics;
-                clients[guid]->subscriptions[subuid]->options = options;
+                updateClientSubMetaTopic(guid);
 
-                announceTopics(guid); // TODO: replace, don't announce all, only announce changes to clients/sub meta topics
+                announceCachedTopics(guid);
                 break;
             }
             default:
@@ -466,7 +510,12 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
             }
             unpacker.unpack_object_end(); // message params
             unpacker.unpack_object_end(); // the message
-        } while (unpacker.ec != json::UnpackerError::OutOfRange);
+        } while (unpacker.ec != json::UnpackerError::OutOfRange && unpacker.peek_type(&nextType) != json::UnpackerError::OutOfRange && nextType != json::ArrayEnd);
+
+        unpacker.unpack_array_end();
+
+        flush(clients[guid]);
+        publishInitialValues(guid);
         break;
     }
     case WebSocketOpCode::BinaryFrame:
@@ -574,27 +623,45 @@ bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic)
 {
     assert(networkMode == NetworkMode::Server);
 
-    int64_t id = clients[guid]->topicIds[topic->name];
-    return server->send(guid,
-                        "[{\"method\":\"announce\",\"params\":{\"name\":\""s +
-                            topic->name +
-                            "\",\"id\":"s +
-                            std::to_string(id) +
-                            ",\"type\":\""s +
-                            serializeDataType(topic->value.type) +
-                            "\",\"properties\":{\"persistent\":"s +
-                            (topic->properties.persistent
-                                 ? "true"s
-                                 : "false"s) +
-                            ",\"retained\":"s +
-                            (topic->properties.retained
-                                 ? "true"s
-                                 : "false"s) +
-                            ",\"cached\":"s +
-                            (topic->properties.cached
-                                 ? "true"s
-                                 : "false"s) +
-                            "}}}]"s);
+    ClientData *client = clients[guid];
+
+    if (!client->topicData.contains(topic->name))
+    {
+        client->topicData[topic->name] = {
+            client->nextTopicIdAssigned++,
+            false};
+    }
+    else
+    {
+        // TODO: properly handle re-announcements
+        return true;
+    }
+
+    int64_t id = client->topicData[topic->name].id;
+    std::string text = "{\"method\":\"announce\",\"params\":{\"name\":\""s +
+                       topic->name +
+                       "\",\"id\":"s +
+                       std::to_string(id) +
+                       ",\"type\":\""s +
+                       serializeDataType(topic->value.type) +
+                       "\",\"properties\":{\"persistent\":"s +
+                       (topic->properties.persistent
+                            ? "true"s
+                            : "false"s) +
+                       ",\"retained\":"s +
+                       (topic->properties.retained
+                            ? "true"s
+                            : "false"s) +
+                       ",\"cached\":"s +
+                       (topic->properties.cached
+                            ? "true"s
+                            : "false"s) +
+                       "}}}"s;
+    flush(client, text.length());
+    if (client->textCache.length() > 0)
+        client->textCache.append(","sv); // comma separator
+    client->textCache.append(text);
+    return true;
 }
 
 bool NetworkTableInstance::isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name)
@@ -640,20 +707,87 @@ bool NetworkTableInstance::announceTopic(const Topic *topic)
     return ok;
 }
 
-bool NetworkTableInstance::announceTopics(const Guid &guid)
+bool NetworkTableInstance::announceCachedTopics(const Guid &guid)
 {
     assert(networkMode == NetworkMode::Server);
     bool ok = true;
-    auto subs = clients[guid]->subscriptions;
-    for (auto top : topics)
+    ClientData *client = clients[guid];
+    for (auto topic : topics)
     {
-        if (isSubscribed(subs, top.second->name))
+        if (topic.second->properties.cached && isSubscribed(client->subscriptions, topic.second->name))
         {
-            if (!announceTopic(guid, top.second))
+            if (!announceTopic(guid, topic.second)) // announce topic if cached and subscribed
                 ok = false;
         }
     }
     return ok;
+}
+
+bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    auto packer = msgpack::Packer();
+
+    int64_t id = clients[guid]->topicData[topic->name].id;
+    uint64_t timestamp = getServerTime();
+    uint8_t _type = (uint8_t)topic->value.getAPIType();
+    packer.clear();
+    packer.pack_array_header(4);
+    packer.process(id);
+    packer.process(timestamp);
+    packer.process(_type);
+    topic->value.pack(packer);
+    clients[guid]->topicData[topic->name].initialPublish = true;
+    return server->send(guid, packer.vector());
+}
+
+bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    for (auto client : clients)
+    {
+        if (client.second->topicData.contains(topic->name))
+        {
+            auto t = client.second->topicData[topic->name];
+            if (t.initialPublish)
+            {
+                if (!sendTopicUpdate(client.first, topic))
+                    return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, TopicProperties properties)
+{
+    Topic *topic = getOrCreateTopic(name, value, properties);
+    if (!announceTopic(topic))
+        return false;
+
+    if (!name.starts_with('$'))
+    {
+        if (!publishTopic("$sub$"s + name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{})))
+            return false;
+        if (!publishTopic("$pub$"s + name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{})))
+            return false;
+    }
+
+    return true;
+}
+
+void NetworkTableInstance::publishInitialValues(const Guid &guid)
+{
+    for (auto topic : clients[guid]->topicData)
+    {
+        if (!topic.second.initialPublish)
+        {
+            sendTopicUpdate(guid, topics[topic.first]);
+        }
+    }
 }
 
 void NetworkTableInstance::stop()
@@ -715,4 +849,107 @@ uint64_t NetworkTableInstance::getServerTime()
         return get_absolute_time() + (uint64_t)serverTimeOffset;
     else
         return get_absolute_time() - (uint64_t)(-serverTimeOffset);
+}
+
+void NetworkTableInstance::flush(ClientData *client, std::size_t uncachedSize)
+{
+    if (client->textCache.length() > 0 && client->textCache.length() + uncachedSize + 2 /* '[' around ']' */ > MAX_CLIENT_TEXT_CACHE_LENGTH)
+    {
+        server->send(client->guid, "["s + client->textCache + "]"s /* encase messages in json array */);
+        client->textCache.clear();
+    }
+}
+
+struct ClientsMetaTopic
+{
+    std::string id;
+    std::string conn;
+
+    template <class T>
+    void pack(T &pack)
+    {
+        pack(id, conn);
+    }
+};
+
+void NetworkTableInstance::updateClientsMetaTopic()
+{
+    auto packer = msgpack::Packer<true>();
+    packer.pack_array_header(clients.size());
+    for (auto client : clients)
+    {
+        ClientsMetaTopic topic = {client.second->name, "host:port"};
+        packer.process(topic);
+    }
+
+    auto t = topics["$clients"s];
+    t->value.bin = packer.vector();
+    sendTopicUpdate(t);
+}
+
+void NetworkTableInstance::updateServerSubMetaTopic()
+{
+    auto packer = msgpack::Packer<true>();
+    packer.pack_array_header(thisClient.subscriptions.size());
+    for (auto sub : thisClient.subscriptions)
+    {
+        packer.process(*sub.second);
+    }
+
+    auto t = topics["$serversub"s];
+    t->value.bin = packer.vector();
+    sendTopicUpdate(t);
+}
+
+void NetworkTableInstance::updateServerPubMetaTopic()
+{
+    auto packer = msgpack::Packer<true>();
+    packer.pack_array_header(thisClient.publishers.size());
+    for (auto pub : thisClient.publishers)
+    {
+        packer.process(*pub.second);
+    }
+
+    auto t = topics["$serverpub"s];
+    t->value.bin = packer.vector();
+    sendTopicUpdate(t);
+}
+
+void NetworkTableInstance::updateClientSubMetaTopic(const Guid &guid)
+{
+    auto packer = msgpack::Packer<true>();
+    ClientData *client = clients[guid];
+
+    packer.pack_array_header(client->subscriptions.size());
+    for (auto sub : client->subscriptions)
+    {
+        packer.process(*sub.second);
+    }
+
+    auto t = topics["$clientsub$"s + client->name];
+    t->value.bin = packer.vector();
+    sendTopicUpdate(t);
+}
+
+void NetworkTableInstance::updateClientPubMetaTopic(const Guid &guid)
+{
+    auto packer = msgpack::Packer<true>();
+    ClientData *client = clients[guid];
+
+    packer.pack_array_header(client->publishers.size());
+    for (auto pub : client->publishers)
+    {
+        packer.process(*pub.second);
+    }
+
+    auto t = topics["$clientpub$"s + client->name];
+    t->value.bin = packer.vector();
+    sendTopicUpdate(t);
+}
+
+void NetworkTableInstance::setTestValue(int64_t value)
+{
+    auto t = topics["/SmartDashboard/testvalue"s];
+    t->value.i = value;
+    sendTopicUpdate(t);
 }

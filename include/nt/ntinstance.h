@@ -9,6 +9,8 @@
 #include "../wsserver.h"
 #include "../websocket.h"
 
+static constexpr std::size_t MAX_CLIENT_TEXT_CACHE_LENGTH = 512;
+
 enum class NTDataType : uint8_t
 {
     Bool = 0,
@@ -17,11 +19,11 @@ enum class NTDataType : uint8_t
     Float32 = 3,
     Str = 4,
     Bin = 5,
-    UInt = 6,      // implementation based (not part of api)
-    Json = 7,      // implementation based (not part of api)
-    Raw = 8,       // implementation based (not part of api)
-    Msgpack = 9,   // implementation based (not part of api)
-    Protobuf = 10, // implementation based (not part of api)
+    UInt = 6,      // [Int] implementation based (not part of api)
+    Json = 7,      // [Str] implementation based (not part of api)
+    Raw = 8,       // [Bin] implementation based (not part of api)
+    Msgpack = 9,   // [Bin] implementation based (not part of api)
+    Protobuf = 10, // [Bin] implementation based (not part of api)
     BoolArray = 16,
     Float64Array = 17,
     IntArray = 18,
@@ -39,25 +41,29 @@ struct NTDataValue
         int64_t i;
         float f32;
         std::string str;
-        std::vector<uint8_t> bin;
         uint64_t ui;
-        std::list<bool> bArray;
-        std::list<double> f64Array;
-        std::list<int64_t> iArray;
-        std::list<float> f32Array;
-        std::list<std::string> strArray;
     };
+    std::list<bool> bArray;
+    std::list<double> f64Array;
+    std::list<int64_t> iArray;
+    std::list<float> f32Array;
+    std::list<std::string> strArray;
+    std::vector<uint8_t> bin;
 
-    void unpack(msgpack::Unpacker &unpacker);
-    void pack(msgpack::Packer &packer);
+    NTDataType getAPIType() const;
 
-    NTDataValue(NTDataType type, msgpack::Unpacker &unpacker);
+    void unpack(msgpack::Unpacker<false> &unpacker);
+    void pack(msgpack::Packer<false> &packer) const;
+
+    NTDataValue(NTDataType type, msgpack::Unpacker<false> &unpacker);
     NTDataValue(bool b);
     NTDataValue(double f64);
     NTDataValue(int64_t i);
     NTDataValue(float f32);
     NTDataValue(std::string str);
+    NTDataValue(NTDataType type, std::string str);
     NTDataValue(std::vector<uint8_t> bin);
+    NTDataValue(NTDataType type, std::vector<uint8_t> bin);
     NTDataValue(uint64_t ui);
     NTDataValue(std::list<bool> bArray);
     NTDataValue(std::list<double> f64Array);
@@ -97,6 +103,8 @@ public:
 
     bool sendRTT();
 
+    void setTestValue(int64_t value);
+
 private:
     WsServer *server;
     WebSocket *client;
@@ -108,6 +116,12 @@ private:
         bool all;
         bool topicsonly;
         bool prefix;
+
+        template <class T>
+        void pack(T &pack)
+        {
+            pack(periodic, all, topicsonly, prefix);
+        }
     };
 
     struct TopicProperties
@@ -127,13 +141,29 @@ private:
     {
         int32_t uid;
         std::vector<std::string> topics;
-        SubscriptionOptions options = SubscriptionOptions_DEFAULT;
+        SubscriptionOptions options;
+
+        Subscription(int32_t uid, std::vector<std::string> topics, SubscriptionOptions options) : uid(uid), topics(topics), options(options)
+        {
+        }
+
+        template <class T>
+        void pack(T &pack)
+        {
+            pack(uid, topics, options);
+        }
     };
 
     struct Publisher
     {
         int32_t uid;
         std::string topic;
+
+        template <class T>
+        void pack(T &pack)
+        {
+            pack(uid, topic);
+        }
     };
 
     struct Topic
@@ -150,25 +180,73 @@ private:
         ~Topic() {}
     };
 
+    struct ClientTopicData
+    {
+        int64_t id;
+        bool initialPublish;
+    };
+
     struct ClientData
     {
+        Guid guid;
         std::string name;
         std::unordered_map<int32_t, Subscription *> subscriptions;
         std::unordered_map<int32_t, Publisher *> publishers;
-        std::unordered_map<std::string, int64_t> topicIds;
+        std::unordered_map<std::string, ClientTopicData> topicData;
+        int64_t nextTopicIdAssigned = 0;
+        std::string textCache = {};
     };
 
-    std::unordered_map<std::string, Topic *> topics;
-    std::unordered_map<Guid, ClientData *> clients;
+    std::unordered_map<std::string, Topic *> topics = {};
+    std::unordered_map<Guid, ClientData *> clients = {};
     ClientData thisClient;
-
     int64_t serverTimeOffset;
+
+    inline Topic *getOrCreateTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT)
+    {
+        if (topics.contains(name))
+            return topics[name];
+        else
+        {
+            Topic *topic = new Topic(name, value);
+            topic->properties = properties;
+            topics[name] = topic;
+            return topic;
+        }
+    }
 
     bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name);
 
     bool announceTopic(const Guid &guid, const Topic *topic);
     bool announceTopic(const Topic *topic);
-    bool announceTopics(const Guid &guid);
+    bool announceCachedTopics(const Guid &guid);
+
+    bool sendTopicUpdate(const Topic *topic);
+    bool sendTopicUpdate(const Guid &guid, const Topic *topic);
+    void publishInitialValues(const Guid &guid);
+
+    bool publishTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT);
+
+    void flush(ClientData *client)
+    {
+        flush(client, MAX_CLIENT_TEXT_CACHE_LENGTH);
+    }
+
+    void flush(ClientData *client, std::size_t uncachedSize);
+
+    void flush()
+    {
+        for (auto client : clients)
+        {
+            flush(client.second);
+        }
+    }
+
+    void updateClientsMetaTopic();
+    void updateServerSubMetaTopic();
+    void updateServerPubMetaTopic();
+    void updateClientSubMetaTopic(const Guid &guid);
+    void updateClientPubMetaTopic(const Guid &guid);
 };
 
 #endif
