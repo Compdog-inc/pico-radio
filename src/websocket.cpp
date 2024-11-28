@@ -748,3 +748,8 @@ bool WebSocket::sendFrame(const WebSocketFrameHeader &header, const uint8_t *pay
     xSemaphoreGive(sendMutex);
     return (size_t)ret == frameLength;
 }
+
+struct sockaddr_in WebSocket::getSocketAddress()
+{
+    return tcp->getSocketAddress();
+}

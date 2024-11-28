@@ -84,5 +84,6 @@ TcpClient *TcpListener::acceptClient()
         return nullptr;
     }
 
-    return new TcpClient(conn_sock);
+    struct sockaddr_in *sin = (struct sockaddr_in *)&remote_addr;
+    return new TcpClient(conn_sock, *sin);
 }

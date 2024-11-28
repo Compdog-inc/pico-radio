@@ -184,6 +184,9 @@ public:
     /// @brief The accepted protocol by the server
     std::string serverProtocol;
 
+    /// @brief Returns the connected socket address
+    struct sockaddr_in getSocketAddress();
+
 private:
     /// @brief Underlying tcp socket
     TcpClient *tcp;

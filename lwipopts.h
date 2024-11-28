@@ -6,6 +6,9 @@
 #define LWIP_SOCKET 1
 #define MEM_LIBC_MALLOC 0
 
+// Don't define compat functions (interfere with client methods)
+#define LWIP_COMPAT_SOCKETS 2
+
 #define MEMP_NUM_SYS_TIMEOUT LWIP_NUM_SYS_TIMEOUT_INTERNAL + 1
 
 #define TCPIP_THREAD_STACKSIZE 2048

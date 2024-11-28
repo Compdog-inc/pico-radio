@@ -4,7 +4,7 @@
 #include <lwip/sockets.h>
 #include "tcpclient.h"
 
-TcpClient::TcpClient(int sock) : sock(sock), connected(true)
+TcpClient::TcpClient(int sock, struct sockaddr_in sin) : sock(sock), sin(sin), connected(true)
 {
 }
 
@@ -16,6 +16,8 @@ TcpClient::TcpClient(ip4_addr_t addr, int port)
     listen_addr.sin_family = AF_INET;
     listen_addr.sin_port = htons(port);
     listen_addr.sin_addr.s_addr = addr.addr;
+
+    sin = listen_addr;
 
     if (sock < 0)
     {
@@ -136,4 +138,9 @@ ssize_t TcpClient::writeBytes(const void *data, size_t size)
         disconnect(); // socket error means not connected
     }
     return res;
+}
+
+struct sockaddr_in TcpClient::getSocketAddress()
+{
+    return sin;
 }

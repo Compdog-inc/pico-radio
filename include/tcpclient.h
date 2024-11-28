@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <lwip/ip4_addr.h>
+#include <lwip/sockets.h>
 
 constexpr uint32_t TCP_INFINITE_TIMEOUT = ~((uint32_t)0);
 
@@ -12,7 +13,8 @@ class TcpClient
 public:
     /// @brief Wraps a tcp client around an existing network socket
     /// @param sock The network socket
-    TcpClient(int sock);
+    /// @param sin The socket address used
+    TcpClient(int sock, struct sockaddr_in sin);
     /// @brief Creates and connects a tcp client to a server
     /// @param addr The address of the server
     /// @param port The port to connect to
@@ -43,8 +45,12 @@ public:
     /// @return The number of bytes actually written. A negative number is an error.
     ssize_t writeBytes(const void *data, size_t size);
 
+    /// @brief Returns the connected socket address
+    struct sockaddr_in getSocketAddress();
+
 private:
     int sock;
+    struct sockaddr_in sin;
     bool connected;
 };
 
