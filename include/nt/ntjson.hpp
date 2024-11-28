@@ -137,7 +137,6 @@ namespace json
                 return 0;
 
             std::string_view asStr((const char *)begin, data_pointer - begin);
-            safe_increment();
 
             int32_t i;
             if (std::from_chars(asStr.data(), asStr.data() + asStr.size(), i).ec == std::errc::invalid_argument)
@@ -151,20 +150,37 @@ namespace json
 
         bool unpack_bool()
         {
-            const uint8_t *true_ptr;
-            auto true_ec = safe_peek_find("true"sv, &true_ptr);
-            if (true_ec == UnpackerError::OutOfRange)
-                true_ptr = data_end;
+            char c;
+            do
+            {
+                c = safe_data();
+                if (ec == UnpackerError::OutOfRange)
+                    break;
 
-            const uint8_t *false_ptr;
-            auto false_ec = safe_peek_find("false"sv, &false_ptr);
-            if (false_ec == UnpackerError::OutOfRange)
-                false_ptr = data_end;
+                switch (c)
+                {
+                case 't':
+                    if (data_pointer + 3 < data_end && data_pointer[1] == 'r' && data_pointer[2] == 'u' && data_pointer[3] == 'e')
+                    {
+                        data_pointer += 4;
+                        return true;
+                    }
+                    break;
+                case 'f':
+                    if (data_pointer + 4 < data_end && data_pointer[1] == 'a' && data_pointer[2] == 'l' && data_pointer[3] == 's' && data_pointer[4] == 'e')
+                    {
+                        data_pointer += 5;
+                        return false;
+                    }
+                    break;
+                default:
+                    break;
+                }
 
-            if (true_ptr < false_ptr)
-                return true;
-            else
-                return false;
+                ec = safe_peek_increment(data_pointer);
+            } while (ec != UnpackerError::OutOfRange);
+
+            return false;
         }
 
         DataType peek_type() const
@@ -183,64 +199,76 @@ namespace json
 
         std::error_code peek_type(DataType *type) const
         {
-            const uint8_t *array_ptr;
-            auto array_ec = safe_peek_find('[', &array_ptr);
-            if (array_ec == UnpackerError::OutOfRange)
-                array_ptr = data_end;
-            std::pair<const uint8_t *, DataType> array = {array_ptr, Array};
+            const uint8_t *ptr = data_pointer;
+            std::error_code ec{};
 
-            const uint8_t *array_end_ptr;
-            auto array_end_ec = safe_peek_find(']', &array_end_ptr);
-            if (array_end_ec == UnpackerError::OutOfRange)
-                array_end_ptr = data_end;
-            std::pair<const uint8_t *, DataType> array_end = {array_end_ptr, ArrayEnd};
+            char c;
+            do
+            {
+                ec = safe_peek(ptr, (uint8_t &)c);
+                if (ec == UnpackerError::OutOfRange)
+                    break;
 
-            const uint8_t *object_ptr;
-            auto object_ec = safe_peek_find('{', &object_ptr);
-            if (object_ec == UnpackerError::OutOfRange)
-                object_ptr = data_end;
-            std::pair<const uint8_t *, DataType> object = {object_ptr, Object};
+                switch (c)
+                {
+                case '[':
+                    *type = Array;
+                    return ec;
+                case ']':
+                    *type = ArrayEnd;
+                    return ec;
+                case '{':
+                    *type = Object;
+                    return ec;
+                case '}':
+                    *type = ObjectEnd;
+                    return ec;
+                case '"':
+                    *type = Str;
+                    return ec;
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                case '-':
+                case '.':
+                    *type = Int;
+                    return ec;
+                case 't':
+                    if (ptr + 3 < data_end && ptr[1] == 'r' && ptr[2] == 'u' && ptr[3] == 'e')
+                    {
+                        *type = True;
+                        return ec;
+                    }
+                    break;
+                case 'f':
+                    if (ptr + 4 < data_end && ptr[1] == 'a' && ptr[2] == 'l' && ptr[3] == 's' && ptr[4] == 'e')
+                    {
+                        *type = False;
+                        return ec;
+                    }
+                    break;
+                case 'n':
+                    if (ptr + 3 < data_end && ptr[1] == 'u' && ptr[2] == 'l' && ptr[3] == 'l')
+                    {
+                        *type = Null;
+                        return ec;
+                    }
+                    break;
+                default:
+                    break;
+                }
 
-            const uint8_t *object_end_ptr;
-            auto object_end_ec = safe_peek_find('}', &object_end_ptr);
-            if (object_end_ec == UnpackerError::OutOfRange)
-                object_end_ptr = data_end;
-            std::pair<const uint8_t *, DataType> object_end = {object_end_ptr, ObjectEnd};
+                ec = safe_peek_increment(ptr);
+            } while (ec != UnpackerError::OutOfRange);
 
-            const uint8_t *str_ptr;
-            auto str_ec = safe_peek_find('"', &str_ptr);
-            if (str_ec == UnpackerError::OutOfRange)
-                str_ptr = data_end;
-            std::pair<const uint8_t *, DataType> str = {str_ptr, Str};
-
-            const uint8_t *true_ptr;
-            auto true_ec = safe_peek_find("true"sv, &true_ptr);
-            if (true_ec == UnpackerError::OutOfRange)
-                true_ptr = data_end;
-            std::pair<const uint8_t *, DataType> trueType = {true_ptr, True};
-
-            const uint8_t *false_ptr;
-            auto false_ec = safe_peek_find("false"sv, &false_ptr);
-            if (false_ec == UnpackerError::OutOfRange)
-                false_ptr = data_end;
-            std::pair<const uint8_t *, DataType> falseType = {false_ptr, False};
-
-            const uint8_t *int_ptr;
-            auto int_ec = safe_peek_find(&int_ptr, '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '.');
-            if (int_ec == UnpackerError::OutOfRange)
-                int_ptr = data_end;
-            std::pair<const uint8_t *, DataType> intType = {int_ptr, Int};
-
-            const uint8_t *null_ptr;
-            auto null_ec = safe_peek_find("null"sv, &null_ptr);
-            if (null_ec == UnpackerError::OutOfRange)
-                null_ptr = data_end;
-            std::pair<const uint8_t *, DataType> nullType = {null_ptr, Null};
-
-            auto closest = std::min({array, array_end, object, object_end, str, trueType, falseType, intType, nullType}, [](auto &a, auto &b)
-                                    { return a.first < b.first; });
-            *type = closest.second;
-            return closest.first == data_end ? UnpackerError::OutOfRange : std::error_code{};
+            return ec;
         }
 
         std::error_code ec{};
@@ -257,32 +285,11 @@ namespace json
             return 0;
         }
 
-        std::string_view safe_view(std::size_t len)
-        {
-            if (data_pointer + len <= data_end)
-                return std::string_view((const char *)data_pointer, len);
-            ec = UnpackerError::OutOfRange;
-            return 0;
-        }
-
         std::error_code safe_peek(const uint8_t *ptr, uint8_t &data) const
         {
             if (ptr < data_end)
             {
                 data = *ptr;
-                return {};
-            }
-            else
-            {
-                return UnpackerError::OutOfRange;
-            }
-        }
-
-        std::error_code safe_peek_view(const uint8_t *ptr, std::string_view &view, std::size_t len) const
-        {
-            if (ptr + len <= data_end)
-            {
-                view = std::string_view((const char *)ptr, len);
                 return {};
             }
             else
@@ -335,25 +342,13 @@ namespace json
                 if (c == ch)
                     break;
                 safe_increment();
-            } while (ec != UnpackerError::OutOfRange && c != ch);
-        }
-
-        inline void safe_find(std::string_view match)
-        {
-            std::string_view view;
-            do
-            {
-                view = safe_view(match.length());
-                if (view == match)
-                    break;
-                safe_increment();
-            } while (ec != UnpackerError::OutOfRange && view != match);
+            } while (ec != UnpackerError::OutOfRange);
         }
 
         template <CharType... Matches>
         inline void safe_find(Matches... match)
         {
-            ec = safe_peek_find(&data_pointer, match...);
+            ec = safe_peek_find(data_pointer, match...);
         }
 
         inline std::error_code safe_peek_find_after(char ch, const uint8_t **data_pointer) const
@@ -371,50 +366,41 @@ namespace json
             return ec;
         }
 
-        inline std::error_code safe_peek_find(char ch, const uint8_t **data_pointer) const
+        inline std::error_code safe_peek_find(char ch, const uint8_t *&data_pointer) const
         {
             std::error_code ec{};
-            *data_pointer = this->data_pointer;
             char c;
             do
             {
-                ec = safe_peek(*data_pointer, (uint8_t &)c);
+                ec = safe_peek(data_pointer, (uint8_t &)c);
                 if (ec == UnpackerError::OutOfRange || c == ch)
                     break;
-                ec = safe_peek_increment(*data_pointer);
-            } while (ec != UnpackerError::OutOfRange && c != ch);
-            return ec;
-        }
-
-        inline std::error_code safe_peek_find(std::string_view match, const uint8_t **data_pointer) const
-        {
-            std::error_code ec{};
-            *data_pointer = this->data_pointer;
-            std::string_view view;
-            do
-            {
-                ec = safe_peek_view(*data_pointer, view, match.length());
-                if (ec == UnpackerError::OutOfRange || view == match)
-                    break;
-                ec = safe_peek_increment(*data_pointer);
-            } while (ec != UnpackerError::OutOfRange && view != match);
+                ec = safe_peek_increment(data_pointer);
+            } while (ec != UnpackerError::OutOfRange);
             return ec;
         }
 
         template <CharType... Matches>
-        inline std::error_code safe_peek_find(const uint8_t **data_pointer, Matches... match) const
+        inline std::error_code safe_peek_find(const uint8_t *&data_pointer, Matches... match) const
         {
-            *data_pointer = this->data_end;
-            ([&]
-             {
-                const uint8_t *ptr = *data_pointer;
-                std::error_code ec = safe_peek_find(match, &ptr);
-                if (ec != UnpackerError::OutOfRange)
+            std::error_code ec{};
+            char c;
+            do
+            {
+                ec = safe_peek(data_pointer, (uint8_t &)c);
+                if (ec == UnpackerError::OutOfRange)
+                    break;
+
+                // test each match
+                for (const auto p : {match...})
                 {
-                    *data_pointer = std::min(*data_pointer, ptr);
-                } }(),
-             ...);
-            return (*data_pointer == this->data_end) ? (UnpackerError::OutOfRange) : std::error_code{};
+                    if (c == p)
+                        return ec;
+                }
+
+                ec = safe_peek_increment(data_pointer);
+            } while (ec != UnpackerError::OutOfRange);
+            return ec;
         }
     };
 };
