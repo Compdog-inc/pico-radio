@@ -10,6 +10,7 @@
 #include "../websocket.h"
 
 static constexpr std::size_t MAX_CLIENT_TEXT_CACHE_LENGTH = 512;
+static constexpr std::size_t MAX_CLIENT_BINARY_CACHE_LENGTH = 512;
 
 enum class NTDataType : uint8_t
 {
@@ -270,18 +271,33 @@ private:
 
     size_t nextClientWithName(std::string_view name);
 
-    void flush(ClientData *client)
+    void flushText(ClientData *client)
     {
-        flush(client, MAX_CLIENT_TEXT_CACHE_LENGTH);
+        flushText(client, MAX_CLIENT_TEXT_CACHE_LENGTH);
     }
 
-    void flush(ClientData *client, std::size_t uncachedSize);
+    void flushText(ClientData *client, std::size_t uncachedSize);
 
-    void flush()
+    void flushText()
     {
         for (auto client : clients)
         {
-            flush(client.second);
+            flushText(client.second);
+        }
+    }
+
+    void flushBinary(ClientData *client)
+    {
+        flushBinary(client, MAX_CLIENT_BINARY_CACHE_LENGTH);
+    }
+
+    void flushBinary(ClientData *client, std::size_t uncachedSize);
+
+    void flushBinary()
+    {
+        for (auto client : clients)
+        {
+            flushBinary(client.second);
         }
     }
 

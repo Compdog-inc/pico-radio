@@ -373,8 +373,9 @@ void NetworkTableInstance::startServer()
                                 inst->updateClientsMetaTopic();
                                 inst->updateClientSubMetaTopic(entry->guid);
                                 inst->updateClientPubMetaTopic(entry->guid);
-                                inst->flush(data);
-                                inst->publishInitialValues(entry->guid); });
+                                inst->flushText(data);
+                                inst->publishInitialValues(entry->guid);
+                                inst->flushBinary(data); });
 
     server->clientDisconnected.Add([](WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason, void *args)
                                    {
@@ -386,7 +387,8 @@ void NetworkTableInstance::startServer()
                                        for (auto o : data->publishers)
                                            delete o.second;
                                        delete data;
-                                       inst->updateClientsMetaTopic(); });
+                                       inst->updateClientsMetaTopic();
+                                       inst->flushBinary(); });
 
     server->messageReceived.Add([](WsServer *server, const Guid &guid, const WebSocketFrame &frame, void *args)
                                 {
@@ -408,6 +410,9 @@ void NetworkTableInstance::startServer()
     updateServerPubMetaTopic();
 
     publishTopic("/SmartDashboard/testvalue", {(int64_t)5}, {.retained = true, .cached = true});
+
+    flushText();
+    flushBinary();
 }
 
 void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &frame)
@@ -527,8 +532,9 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
         unpacker.unpack_array_end();
 
-        flush(clients[guid]);
+        flushText(clients[guid]);
         publishInitialValues(guid);
+        flushBinary();
         break;
     }
     case WebSocketOpCode::BinaryFrame:
@@ -671,7 +677,7 @@ bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic)
                             ? "true"s
                             : "false"s) +
                        "}}}"s;
-    flush(client, text.length());
+    flushText(client, text.length());
     if (client->textCache.length() > 0)
         client->textCache.append(","sv); // comma separator
     client->textCache.append(text);
@@ -778,8 +784,10 @@ bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
     assert(networkMode == NetworkMode::Server);
 
     auto packer = msgpack::Packer();
+    auto client = clients[guid];
+    assert(client != nullptr);
 
-    int64_t id = clients[guid]->topicData[topic->name].id;
+    int64_t id = client->topicData[topic->name].id;
     uint64_t timestamp = getServerTime();
     uint8_t _type = (uint8_t)topic->value.getAPIType();
     packer.clear();
@@ -788,8 +796,12 @@ bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
     packer.process(timestamp);
     packer.process(_type);
     topic->value.pack(packer);
-    clients[guid]->topicData[topic->name].initialPublish = true;
-    return server->send(guid, packer.vector());
+    client->topicData[topic->name].initialPublish = true;
+
+    auto bin = packer.vector();
+    flushBinary(client, bin.size());
+    client->binaryCache.insert(std::end(client->binaryCache), std::begin(bin), std::end(bin));
+    return true;
 }
 
 bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
@@ -922,12 +934,23 @@ uint64_t NetworkTableInstance::getServerTime()
         return get_absolute_time() - (uint64_t)(-serverTimeOffset);
 }
 
-void NetworkTableInstance::flush(ClientData *client, std::size_t uncachedSize)
+void NetworkTableInstance::flushText(ClientData *client, std::size_t uncachedSize)
 {
+    client->textCache.reserve(MAX_CLIENT_TEXT_CACHE_LENGTH);
     if (client->textCache.length() > 0 && client->textCache.length() + uncachedSize + 2 /* '[' around ']' */ > MAX_CLIENT_TEXT_CACHE_LENGTH)
     {
         server->send(client->guid, "["s + client->textCache + "]"s /* encase messages in json array */);
         client->textCache.clear();
+    }
+}
+
+void NetworkTableInstance::flushBinary(ClientData *client, std::size_t uncachedSize)
+{
+    client->binaryCache.reserve(MAX_CLIENT_BINARY_CACHE_LENGTH);
+    if (client->binaryCache.size() > 0 && client->binaryCache.size() + uncachedSize > MAX_CLIENT_BINARY_CACHE_LENGTH)
+    {
+        server->send(client->guid, client->binaryCache);
+        client->binaryCache.clear();
     }
 }
 
@@ -1088,4 +1111,5 @@ void NetworkTableInstance::setTestValue(int64_t value)
     assert(t != nullptr);
     t->value.i = value;
     sendTopicUpdate(t);
+    flushBinary();
 }
