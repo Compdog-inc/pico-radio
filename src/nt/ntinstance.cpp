@@ -132,6 +132,70 @@ std::string serializeDataType(NTDataType type)
     }
 }
 
+NTDataType parseDataType(std::string_view str)
+{
+    if (str == "boolean"sv)
+    {
+        return NTDataType::Bool;
+    }
+    else if (str == "double"sv)
+    {
+        return NTDataType::Float64;
+    }
+    else if (str == "int"sv)
+    {
+        return NTDataType::Int;
+    }
+    else if (str == "float"sv)
+    {
+        return NTDataType::Float32;
+    }
+    else if (str == "string"sv)
+    {
+        return NTDataType::Str;
+    }
+    else if (str == "json"sv)
+    {
+        return NTDataType::Json;
+    }
+    else if (str == "raw"sv)
+    {
+        return NTDataType::Bin;
+    }
+    else if (str == "msgpack"sv)
+    {
+        return NTDataType::Msgpack;
+    }
+    else if (str == "protobuf"sv)
+    {
+        return NTDataType::Protobuf;
+    }
+    else if (str == "boolean[]"sv)
+    {
+        return NTDataType::BoolArray;
+    }
+    else if (str == "double[]"sv)
+    {
+        return NTDataType::Float64Array;
+    }
+    else if (str == "int[]"sv)
+    {
+        return NTDataType::IntArray;
+    }
+    else if (str == "float[]"sv)
+    {
+        return NTDataType::Float32Array;
+    }
+    else if (str == "string[]"sv)
+    {
+        return NTDataType::StrArray;
+    }
+    else
+    {
+        return NTDataType::Bin;
+    }
+}
+
 NTDataType NTDataValue::getAPIType() const
 {
     if (type == NTDataType::UInt)
@@ -155,43 +219,55 @@ void NTDataValue::unpack(msgpack::Unpacker<false> &unpacker)
     switch (type)
     {
     case NTDataType::Bool:
+        b = false;
         unpacker.process(b);
         break;
     case NTDataType::Float64:
+        f64 = 0;
         unpacker.process(f64);
         break;
     case NTDataType::Int:
+        i = 0;
         unpacker.process(i);
         break;
     case NTDataType::Float32:
+        f32 = 0;
         unpacker.process(f32);
         break;
     case NTDataType::Str:
     case NTDataType::Json:
+        str = {};
         unpacker.process(str);
         break;
     case NTDataType::Bin:
     case NTDataType::Raw:
     case NTDataType::Msgpack:
     case NTDataType::Protobuf:
+        bin = {};
         unpacker.process(bin);
         break;
     case NTDataType::UInt:
+        ui = 0;
         unpacker.process(ui);
         break;
     case NTDataType::BoolArray:
+        bArray = {};
         unpacker.process(bArray);
         break;
     case NTDataType::Float64Array:
+        f64Array = {};
         unpacker.process(f64Array);
         break;
     case NTDataType::IntArray:
+        iArray = {};
         unpacker.process(iArray);
         break;
     case NTDataType::Float32Array:
+        f32Array = {};
         unpacker.process(f32Array);
         break;
     case NTDataType::StrArray:
+        strArray = {};
         unpacker.process(strArray);
         break;
     default:
@@ -255,6 +331,55 @@ NTDataValue::NTDataValue(NTDataType type, msgpack::Unpacker<false> &unpacker) : 
     unpack(unpacker);
 }
 
+NTDataValue::NTDataValue(NTDataType type) : type(type)
+{
+    switch (type)
+    {
+    case NTDataType::Bool:
+        b = false;
+        break;
+    case NTDataType::Float64:
+        f64 = 0;
+        break;
+    case NTDataType::Int:
+        i = 0;
+        break;
+    case NTDataType::Float32:
+        f32 = 0;
+        break;
+    case NTDataType::Str:
+    case NTDataType::Json:
+        str = {};
+        break;
+    case NTDataType::Bin:
+    case NTDataType::Raw:
+    case NTDataType::Msgpack:
+    case NTDataType::Protobuf:
+        bin = std::vector<uint8_t>{};
+        break;
+    case NTDataType::UInt:
+        ui = 0;
+        break;
+    case NTDataType::BoolArray:
+        bArray = {};
+        break;
+    case NTDataType::Float64Array:
+        f64Array = {};
+        break;
+    case NTDataType::IntArray:
+        iArray = {};
+        break;
+    case NTDataType::Float32Array:
+        f32Array = {};
+        break;
+    case NTDataType::StrArray:
+        strArray = {};
+        break;
+    default:
+        break;
+    }
+}
+
 NTDataValue::NTDataValue(bool b) : type(NTDataType::Bool), b(b) {}
 NTDataValue::NTDataValue(double f64) : type(NTDataType::Float64), f64(f64) {}
 NTDataValue::NTDataValue(int64_t i) : type(NTDataType::Int), i(i) {}
@@ -287,9 +412,13 @@ NTDataValue::NTDataValue(const NTDataValue &other) : type(other.type)
         f32 = other.f32;
         break;
     case NTDataType::Str:
+    case NTDataType::Json:
         str = other.str;
         break;
     case NTDataType::Bin:
+    case NTDataType::Raw:
+    case NTDataType::Msgpack:
+    case NTDataType::Protobuf:
         bin = std::vector<uint8_t>(other.bin);
         break;
     case NTDataType::UInt:
@@ -317,6 +446,58 @@ NTDataValue::NTDataValue(const NTDataValue &other) : type(other.type)
 
 NTDataValue::~NTDataValue()
 {
+}
+
+void NTDataValue::assign(const NTDataValue &other)
+{
+    if (getAPIType() == other.getAPIType()) // matching type is required
+    {
+        switch (other.type)
+        {
+        case NTDataType::Bool:
+            b = other.b;
+            break;
+        case NTDataType::Float64:
+            f64 = other.f64;
+            break;
+        case NTDataType::Int:
+            i = other.i;
+            break;
+        case NTDataType::Float32:
+            f32 = other.f32;
+            break;
+        case NTDataType::Str:
+        case NTDataType::Json:
+            str = other.str;
+            break;
+        case NTDataType::Bin:
+        case NTDataType::Raw:
+        case NTDataType::Msgpack:
+        case NTDataType::Protobuf:
+            bin = std::vector<uint8_t>(other.bin);
+            break;
+        case NTDataType::UInt:
+            ui = other.ui;
+            break;
+        case NTDataType::BoolArray:
+            bArray = other.bArray;
+            break;
+        case NTDataType::Float64Array:
+            f64Array = other.f64Array;
+            break;
+        case NTDataType::IntArray:
+            iArray = other.iArray;
+            break;
+        case NTDataType::Float32Array:
+            f32Array = other.f32Array;
+            break;
+        case NTDataType::StrArray:
+            strArray = other.strArray;
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 static constexpr int NT4_SERVER_PORT = 5810;
@@ -409,7 +590,7 @@ void NetworkTableInstance::startServer()
     updateServerSubMetaTopic();
     updateServerPubMetaTopic();
 
-    publishTopic("/SmartDashboard/testvalue", {(int64_t)5}, {.retained = true, .cached = true});
+    publishTopic("/SmartDashboard/testvalue", {(float)0.0f}, {.retained = true, .cached = true});
 
     flushText();
     flushBinary();
@@ -523,6 +704,80 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                 announceCachedTopics(guid);
                 break;
             }
+            case MessageMethod::Publish:
+            {
+                if (networkMode != NetworkMode::Server)
+                    break;
+
+                std::string topic;
+                int32_t pubuid;
+                NTDataType type;
+                TopicProperties properties = TopicProperties_DEFAULT;
+                for (int i = 0; i < 4; i++)
+                {
+                    auto key = unpacker.unpack_key();
+                    if (key == "name"sv)
+                    {
+                        topic = unpacker.unpack_string();
+                    }
+                    else if (key == "pubuid"sv)
+                    {
+                        pubuid = unpacker.unpack_int();
+                    }
+                    else if (key == "type"sv)
+                    {
+                        type = parseDataType(unpacker.unpack_string());
+                    }
+                    else if (key == "properties"sv)
+                    {
+                        unpacker.unpack_object();
+                        json::DataType type;
+                        while (
+                            unpacker.peek_type(&type) != json::UnpackerError::OutOfRange &&
+                            type != json::ObjectEnd)
+                        {
+                            auto mkey = unpacker.unpack_key();
+                            if (mkey == "persistent"sv && unpacker.is_bool(unpacker.peek_type()))
+                            {
+                                properties.persistent = unpacker.unpack_bool();
+                            }
+                            else if (mkey == "retained"sv && unpacker.is_bool(unpacker.peek_type()))
+                            {
+                                properties.retained = unpacker.unpack_bool();
+                            }
+                            else if (mkey == "cached"sv && unpacker.is_bool(unpacker.peek_type()))
+                            {
+                                properties.cached = unpacker.unpack_bool();
+                            }
+                        }
+                        unpacker.unpack_object_end();
+                    }
+                }
+
+                if (!clients[guid]->publishers[pubuid])
+                {
+                    clients[guid]->publishers[pubuid] = new Publisher(pubuid, topic);
+                }
+                else
+                {
+                    clients[guid]->publishers[pubuid]->uid = pubuid;
+                    clients[guid]->publishers[pubuid]->topic = topic;
+                }
+
+                if (!this->topics.contains(topic))
+                {
+                    publishTopic(topic, NTDataValue(type), guid, pubuid, properties);
+                }
+                else
+                {
+                    // topic already published, just respond to client
+                    announceTopic(guid, this->topics[topic], pubuid);
+                }
+
+                updateClientPubMetaTopic(guid);
+                updateTopicPubMetaTopic(topic);
+                break;
+            }
             default:
                 break;
             }
@@ -547,14 +802,14 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
             std::size_t array_size = unpacker.unpack_array_header();
             if (array_size == 4)
             {
-                int64_t id;
-                uint64_t timestamp;
-                uint8_t _type;
+                int64_t id = 0;
+                uint64_t timestamp = 0;
+                uint8_t _type = 0;
                 unpacker.process(id);
                 unpacker.process(timestamp);
                 unpacker.process(_type);
 
-                NTDataValue data = {(NTDataType)_type, unpacker};
+                NTDataValue data((NTDataType)_type, unpacker);
 
                 if (id == -1) // RTT measurement
                 {
@@ -602,14 +857,31 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                 }
                 else
                 {
-                    auto it = std::find_if(server->clients.begin(), server->clients.end(),
-                                           [&guid](auto &&p)
-                                           { return p->guid == guid; });
-
-                    if (it != server->clients.end())
+                    switch (networkMode)
                     {
-                        std::string_view path = (*it)->requestedPath;
-                        printf("Binary/%.*s@%i at %u / %u\n", path.length(), path.data(), id, timestamp, _type);
+                    case NetworkMode::Server:
+                    {
+                        auto client = clients[guid];
+                        auto publisher = client->publishers[id];
+                        if (publisher != nullptr)
+                        {
+                            auto topic = topics[publisher->topic];
+                            if (topic != nullptr)
+                            {
+                                topic->value.assign(data);
+                                sendTopicUpdate(topic);
+                            }
+                        }
+
+                        flushBinary();
+                        break;
+                    }
+                    case NetworkMode::Client:
+                    {
+                        break;
+                    }
+                    default:
+                        break;
                     }
                 }
             }
@@ -665,6 +937,49 @@ bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic)
                        ",\"type\":\""s +
                        serializeDataType(topic->value.type) +
                        "\",\"properties\":{\"persistent\":"s +
+                       (topic->properties.persistent
+                            ? "true"s
+                            : "false"s) +
+                       ",\"retained\":"s +
+                       (topic->properties.retained
+                            ? "true"s
+                            : "false"s) +
+                       ",\"cached\":"s +
+                       (topic->properties.cached
+                            ? "true"s
+                            : "false"s) +
+                       "}}}"s;
+    flushText(client, text.length());
+    if (client->textCache.length() > 0)
+        client->textCache.append(","sv); // comma separator
+    client->textCache.append(text);
+    return true;
+}
+
+bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic, int32_t pubuid)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    ClientData *client = clients[guid];
+    assert(client != nullptr);
+
+    if (!client->topicData.contains(topic->name))
+    {
+        client->topicData[topic->name] = {
+            client->nextTopicIdAssigned++,
+            false};
+    }
+
+    int64_t id = client->topicData[topic->name].id;
+    std::string text = "{\"method\":\"announce\",\"params\":{\"name\":\""s +
+                       topic->name +
+                       "\",\"id\":"s +
+                       std::to_string(id) +
+                       ",\"type\":\""s +
+                       serializeDataType(topic->value.type) +
+                       "\",\"pubuid\":"s +
+                       std::to_string(pubuid) +
+                       ",\"properties\":{\"persistent\":"s +
                        (topic->properties.persistent
                             ? "true"s
                             : "false"s) +
@@ -762,6 +1077,26 @@ bool NetworkTableInstance::announceTopic(const Topic *topic)
     return ok;
 }
 
+bool NetworkTableInstance::announceTopic(const Topic *topic, const Guid &publisherGuid, int32_t pubuid)
+{
+    assert(networkMode == NetworkMode::Server);
+    bool ok = true;
+    for (auto client : clients)
+    {
+        if (client.first == publisherGuid)
+        {
+            if (!announceTopic(client.first, topic, pubuid))
+                ok = false;
+        }
+        else if (isSubscribed(client.second->subscriptions, topic->name))
+        {
+            if (!announceTopic(client.first, topic))
+                ok = false;
+        }
+    }
+    return ok;
+}
+
 bool NetworkTableInstance::announceCachedTopics(const Guid &guid)
 {
     assert(networkMode == NetworkMode::Server);
@@ -828,6 +1163,25 @@ bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, Top
 {
     Topic *topic = getOrCreateTopic(name, value, properties);
     if (!announceTopic(topic))
+        return false;
+
+    if (!name.starts_with('$'))
+    {
+        if (!publishTopic("$sub$"s + name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}), {.retained = true, .cached = true}))
+            return false;
+        if (!publishTopic("$pub$"s + name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}), {.retained = true, .cached = true}))
+            return false;
+        updateTopicSubMetaTopic(name);
+        updateTopicPubMetaTopic(name);
+    }
+
+    return true;
+}
+
+bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, const Guid &publisherGuid, int32_t pubuid, TopicProperties properties)
+{
+    Topic *topic = getOrCreateTopic(name, value, properties);
+    if (!announceTopic(topic, publisherGuid, pubuid))
         return false;
 
     if (!name.starts_with('$'))
@@ -1105,11 +1459,18 @@ void NetworkTableInstance::updateTopicPubMetaTopic(std::string name)
     sendTopicUpdate(t);
 }
 
-void NetworkTableInstance::setTestValue(int64_t value)
+void NetworkTableInstance::setTestValue(float value)
 {
     auto t = topics["/SmartDashboard/testvalue"s];
     assert(t != nullptr);
-    t->value.i = value;
+    t->value.f32 = value;
     sendTopicUpdate(t);
     flushBinary();
+}
+
+float NetworkTableInstance::getTestValue()
+{
+    auto t = topics["/SmartDashboard/testvalue"s];
+    assert(t != nullptr);
+    return t->value.f32;
 }

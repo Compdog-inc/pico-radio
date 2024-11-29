@@ -56,7 +56,11 @@ struct NTDataValue
     void unpack(msgpack::Unpacker<false> &unpacker);
     void pack(msgpack::Packer<false> &packer) const;
 
+    void assign(const NTDataValue &other);
+
     NTDataValue(NTDataType type, msgpack::Unpacker<false> &unpacker);
+    /// @brief Creates a NTDataValue of a type and default/empty value
+    NTDataValue(NTDataType type);
     NTDataValue(bool b);
     NTDataValue(double f64);
     NTDataValue(int64_t i);
@@ -104,7 +108,8 @@ public:
 
     bool sendRTT();
 
-    void setTestValue(int64_t value);
+    void setTestValue(float value);
+    float getTestValue();
 
 private:
     WsServer *server;
@@ -193,6 +198,10 @@ private:
         int32_t uid;
         std::string topic;
 
+        Publisher(int32_t uid, std::string topic) : uid(uid), topic(topic)
+        {
+        }
+
         template <class T>
         void pack(T &pack)
         {
@@ -260,7 +269,9 @@ private:
     bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, Subscription **out_subscription = nullptr);
 
     bool announceTopic(const Guid &guid, const Topic *topic);
+    bool announceTopic(const Guid &guid, const Topic *topic, int32_t pubuid);
     bool announceTopic(const Topic *topic);
+    bool announceTopic(const Topic *topic, const Guid &publisherGuid, int32_t pubuid);
     bool announceCachedTopics(const Guid &guid);
 
     bool sendTopicUpdate(const Topic *topic);
@@ -268,6 +279,7 @@ private:
     void publishInitialValues(const Guid &guid);
 
     bool publishTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT);
+    bool publishTopic(std::string name, NTDataValue value, const Guid &publisherGuid, int32_t pubuid, TopicProperties properties = TopicProperties_DEFAULT);
 
     size_t nextClientWithName(std::string_view name);
 
