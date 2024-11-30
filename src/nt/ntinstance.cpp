@@ -590,7 +590,7 @@ void NetworkTableInstance::startServer()
     updateServerSubMetaTopic();
     updateServerPubMetaTopic();
 
-    publishTopic("/SmartDashboard/testvalue", {(float)0.0f}, {.retained = true, .cached = true});
+    publishTopic("/SmartDashboard/testvalue", {(int64_t)0}, {.retained = true, .cached = true});
 
     flushText();
     flushBinary();
@@ -778,6 +778,123 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                 updateTopicPubMetaTopic(topic);
                 break;
             }
+            case MessageMethod::UnSubscribe:
+            {
+                if (networkMode != NetworkMode::Server)
+                    break;
+
+                int32_t subuid;
+                auto key = unpacker.unpack_key();
+                if (key == "subuid"sv)
+                {
+                    subuid = unpacker.unpack_int();
+                }
+
+                auto sub = clients[guid]->subscriptions[subuid];
+                if (sub != nullptr)
+                {
+                    clients[guid]->subscriptions.erase(subuid);
+
+                    updateClientSubMetaTopic(guid);
+
+                    for (auto topic : this->topics)
+                    {
+                        if (!topic.first.starts_with('$')) // don't update meta-topic subscriptions
+                        {
+                            if (isSubscribed(sub, topic.first))
+                            {
+                                updateTopicSubMetaTopic(topic.first);
+                            }
+                        }
+                    }
+
+                    delete sub;
+                }
+                break;
+            }
+            case MessageMethod::UnPublish:
+            {
+                if (networkMode != NetworkMode::Server)
+                    break;
+
+                int32_t pubuid;
+                auto key = unpacker.unpack_key();
+                if (key == "pubuid"sv)
+                {
+                    pubuid = unpacker.unpack_int();
+                }
+
+                auto pub = clients[guid]->publishers[pubuid];
+                if (pub != nullptr)
+                {
+                    clients[guid]->publishers.erase(pubuid);
+                    updateClientPubMetaTopic(guid);
+                    updateTopicPubMetaTopic(pub->topic);
+                    delete pub;
+                }
+                break;
+            }
+            case MessageMethod::SetProperties:
+            {
+                if (networkMode != NetworkMode::Server)
+                    break;
+
+                std::string topic;
+                TopicProperties properties = TopicProperties_DEFAULT;
+                bool hasPersistent = false;
+                bool hasRetained = false;
+                bool hasCached = false;
+
+                for (int i = 0; i < 2; i++)
+                {
+                    auto key = unpacker.unpack_key();
+                    if (key == "name"sv)
+                    {
+                        topic = unpacker.unpack_string();
+                    }
+                    else if (key == "update"sv)
+                    {
+                        unpacker.unpack_object();
+                        json::DataType type;
+                        while (
+                            unpacker.peek_type(&type) != json::UnpackerError::OutOfRange &&
+                            type != json::ObjectEnd)
+                        {
+                            auto mkey = unpacker.unpack_key();
+                            if (mkey == "persistent"sv && unpacker.is_bool_or_null(unpacker.peek_type()))
+                            {
+                                hasPersistent = unpacker.unpack_default_bool(properties.persistent);
+                            }
+                            else if (mkey == "retained"sv && unpacker.is_bool_or_null(unpacker.peek_type()))
+                            {
+                                hasRetained = unpacker.unpack_default_bool(properties.retained);
+                            }
+                            else if (mkey == "cached"sv && unpacker.is_bool_or_null(unpacker.peek_type()))
+                            {
+                                hasCached = unpacker.unpack_default_bool(properties.cached);
+                            }
+                        }
+                        unpacker.unpack_object_end();
+                    }
+                }
+
+                auto top = this->topics[topic];
+
+                if (top != nullptr)
+                {
+                    // Set unchanged to existing values
+                    if (hasPersistent)
+                        top->properties.persistent = properties.persistent;
+                    if (hasRetained)
+                        top->properties.retained = properties.retained;
+                    if (hasCached)
+                        top->properties.cached = properties.cached;
+
+                    updateTopicProperties(top, guid);
+                }
+
+                break;
+            }
             default:
                 break;
             }
@@ -787,7 +904,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
         unpacker.unpack_array_end();
 
-        flushText(clients[guid]);
+        flushText();
         publishInitialValues(guid);
         flushBinary();
         break;
@@ -999,6 +1116,61 @@ bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic, i
     return true;
 }
 
+bool NetworkTableInstance::unannounceTopic(const Guid &guid, const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    ClientData *client = clients[guid];
+    assert(client != nullptr);
+
+    if (!client->topicData.contains(topic->name))
+    {
+        return false;
+    }
+
+    int64_t id = client->topicData[topic->name].id;
+    std::string text = "{\"method\":\"unannounce\",\"params\":{\"name\":\""s +
+                       topic->name +
+                       "\",\"id\":"s +
+                       std::to_string(id) +
+                       "}}"s;
+    flushText(client, text.length());
+    if (client->textCache.length() > 0)
+        client->textCache.append(","sv); // comma separator
+    client->textCache.append(text);
+    return true;
+}
+
+bool NetworkTableInstance::sendPropertyUpdate(const Guid &guid, const Topic *topic, bool ack)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    ClientData *client = clients[guid];
+    assert(client != nullptr);
+
+    std::string text = "{\"method\":\"properties\",\"params\":{\"name\":\""s +
+                       topic->name +
+                       (ack ? "\",\"ack\":true"s : "\""s) +
+                       ",\"update\":{\"persistent\":"s +
+                       (topic->properties.persistent
+                            ? "true"s
+                            : "false"s) +
+                       ",\"retained\":"s +
+                       (topic->properties.retained
+                            ? "true"s
+                            : "false"s) +
+                       ",\"cached\":"s +
+                       (topic->properties.cached
+                            ? "true"s
+                            : "false"s) +
+                       "}}}"s;
+    flushText(client, text.length());
+    if (client->textCache.length() > 0)
+        client->textCache.append(","sv); // comma separator
+    client->textCache.append(text);
+    return true;
+}
+
 bool NetworkTableInstance::isSubscribed(Subscription *subscription, std::string name)
 {
     for (auto top : subscription->topics)
@@ -1114,6 +1286,21 @@ bool NetworkTableInstance::announceCachedTopics(const Guid &guid)
     return ok;
 }
 
+bool NetworkTableInstance::unannounceTopic(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+    bool ok = true;
+    for (auto client : clients)
+    {
+        if (isSubscribed(client.second->subscriptions, topic->name))
+        {
+            if (!unannounceTopic(client.first, topic))
+                ok = false;
+        }
+    }
+    return ok;
+}
+
 bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
 {
     assert(networkMode == NetworkMode::Server);
@@ -1195,6 +1382,36 @@ bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, con
     }
 
     return true;
+}
+
+bool NetworkTableInstance::updateTopicProperties(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+    bool ok = true;
+    for (auto client : clients)
+    {
+        if (isSubscribed(client.second->subscriptions, topic->name))
+        {
+            if (!sendPropertyUpdate(client.first, topic, false))
+                ok = false;
+        }
+    }
+    return ok;
+}
+
+bool NetworkTableInstance::updateTopicProperties(const Topic *topic, const Guid &updaterGuid)
+{
+    assert(networkMode == NetworkMode::Server);
+    bool ok = true;
+    for (auto client : clients)
+    {
+        if (isSubscribed(client.second->subscriptions, topic->name))
+        {
+            if (!sendPropertyUpdate(client.first, topic, client.first == updaterGuid))
+                ok = false;
+        }
+    }
+    return ok;
 }
 
 size_t NetworkTableInstance::nextClientWithName(std::string_view name)
@@ -1459,18 +1676,18 @@ void NetworkTableInstance::updateTopicPubMetaTopic(std::string name)
     sendTopicUpdate(t);
 }
 
-void NetworkTableInstance::setTestValue(float value)
+void NetworkTableInstance::setTestValue(int64_t value)
 {
     auto t = topics["/SmartDashboard/testvalue"s];
     assert(t != nullptr);
-    t->value.f32 = value;
+    t->value.i = value;
     sendTopicUpdate(t);
     flushBinary();
 }
 
-float NetworkTableInstance::getTestValue()
+int64_t NetworkTableInstance::getTestValue()
 {
     auto t = topics["/SmartDashboard/testvalue"s];
     assert(t != nullptr);
-    return t->value.f32;
+    return t->value.i;
 }

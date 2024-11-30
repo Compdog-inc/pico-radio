@@ -183,6 +183,32 @@ namespace json
             return false;
         }
 
+        /// @brief Unpacks a bool or sets a default value if null
+        /// @param out_value The value which is set to the bool or default value
+        /// @param default_value The default value to use when null
+        /// @return True if unpack was successful, false if default value was used instead.
+        inline bool unpack_default_bool(bool *out_value, bool default_value)
+        {
+            if (peek_type() == Null)
+            {
+                *out_value = default_value;
+                return false;
+            }
+            else
+            {
+                *out_value = unpack_bool();
+                return true;
+            }
+        }
+
+        /// @brief Unpacks a bool and sets a value if it is not null
+        /// @param value Reference to a bool which is set if the next value is not null
+        /// @return True if unpack was successful, false if the value was unchanged.
+        inline bool unpack_default_bool(bool &value)
+        {
+            return unpack_default_bool(&value, value);
+        }
+
         DataType peek_type() const
         {
             DataType type;
@@ -195,6 +221,11 @@ namespace json
         inline bool is_bool(DataType type) const
         {
             return type == True || type == False;
+        }
+
+        inline bool is_bool_or_null(DataType type) const
+        {
+            return is_bool(type) || type == Null;
         }
 
         std::error_code peek_type(DataType *type) const

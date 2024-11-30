@@ -108,8 +108,8 @@ public:
 
     bool sendRTT();
 
-    void setTestValue(float value);
-    float getTestValue();
+    void setTestValue(int64_t value);
+    int64_t getTestValue();
 
 private:
     WsServer *server;
@@ -274,12 +274,20 @@ private:
     bool announceTopic(const Topic *topic, const Guid &publisherGuid, int32_t pubuid);
     bool announceCachedTopics(const Guid &guid);
 
+    bool unannounceTopic(const Guid &guid, const Topic *topic);
+    bool unannounceTopic(const Topic *topic);
+
     bool sendTopicUpdate(const Topic *topic);
     bool sendTopicUpdate(const Guid &guid, const Topic *topic);
     void publishInitialValues(const Guid &guid);
 
     bool publishTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT);
     bool publishTopic(std::string name, NTDataValue value, const Guid &publisherGuid, int32_t pubuid, TopicProperties properties = TopicProperties_DEFAULT);
+
+    bool sendPropertyUpdate(const Guid &guid, const Topic *topic, bool ack);
+
+    bool updateTopicProperties(const Topic *topic);
+    bool updateTopicProperties(const Topic *topic, const Guid &updaterGuid);
 
     size_t nextClientWithName(std::string_view name);
 
