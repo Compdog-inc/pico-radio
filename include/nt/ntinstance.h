@@ -108,13 +108,12 @@ public:
 
     bool sendRTT();
 
-    void setTestValue(int64_t value);
-    int64_t getTestValue();
-
-private:
-    WsServer *server;
-    WebSocket *client;
-    NetworkMode networkMode;
+    struct TopicProperties
+    {
+        bool persistent;
+        bool retained;
+        bool cached;
+    };
 
     struct SubscriptionOptions
     {
@@ -130,18 +129,42 @@ private:
         }
     };
 
-    struct TopicProperties
-    {
-        bool persistent;
-        bool retained;
-        bool cached;
-    };
-
     static constexpr SubscriptionOptions SubscriptionOptions_DEFAULT = {
         100, false, false, false};
 
     static constexpr TopicProperties TopicProperties_DEFAULT = {
         false, false, true};
+
+    struct AnnouncedTopic
+    {
+        std::string name;
+        int32_t id;
+        NTDataType type;
+        TopicProperties properties;
+
+        AnnouncedTopic(std::string name, int32_t id, NTDataType type, TopicProperties properties) : name(name), id(id), type(type), properties(properties)
+        {
+        }
+    };
+
+private:
+    WsServer *server;
+    WebSocket *client;
+    NetworkMode networkMode;
+
+    struct Topic
+    {
+        std::string name;
+        NTDataValue value;
+        uint32_t publisherCount;
+        TopicProperties properties = TopicProperties_DEFAULT;
+
+        Topic(std::string name, NTDataValue value) : name(name), value(value), publisherCount(0)
+        {
+        }
+
+        ~Topic() {}
+    };
 
     struct Subscription
     {
@@ -209,20 +232,6 @@ private:
         }
     };
 
-    struct Topic
-    {
-        std::string name;
-        NTDataValue value;
-        uint32_t publisherCount;
-        TopicProperties properties = TopicProperties_DEFAULT;
-
-        Topic(std::string name, NTDataValue value) : name(name), value(value), publisherCount(0)
-        {
-        }
-
-        ~Topic() {}
-    };
-
     struct ClientTopicData
     {
         int64_t id;
@@ -249,6 +258,12 @@ private:
     ClientData thisClient;
     int64_t serverTimeOffset;
 
+    inline bool isSelf(ClientData *client)
+    {
+        return client == &thisClient;
+    }
+
+    /* =========================== SERVER FUNCTIONS =========================== */
     inline Topic *getOrCreateTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT)
     {
         if (topics.contains(name))
@@ -266,7 +281,7 @@ private:
     }
 
     bool isSubscribed(Subscription *subscription, std::string name);
-    bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, Subscription **out_subscription = nullptr);
+    bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, bool requireNotTopicsOnly = false, Subscription **out_subscription = nullptr);
 
     bool announceTopic(const Guid &guid, const Topic *topic);
     bool announceTopic(const Guid &guid, const Topic *topic, int32_t pubuid);
@@ -328,6 +343,17 @@ private:
     void updateClientPubMetaTopic(const Guid &guid);
     void updateTopicSubMetaTopic(std::string name);
     void updateTopicPubMetaTopic(std::string name);
+
+    /* =========================== CLIENT FUNCTIONS =========================== */
+
+public:
+    /* =========================== HYBRID FUNCTIONS =========================== */
+    void subscribe(std::vector<std::string> topics, int32_t subuid, SubscriptionOptions options);
+    void unsubscribe(int32_t subuid);
+    AnnouncedTopic publish(std::string name, int32_t pubuid, NTDataType type, TopicProperties properties);
+    void unpublish(int32_t pubuid);
+    TopicProperties setProperties(std::string name, TopicProperties update);
+    void updateTopic(int32_t id, NTDataValue value);
 };
 
 #endif

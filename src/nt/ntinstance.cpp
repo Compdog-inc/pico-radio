@@ -590,8 +590,6 @@ void NetworkTableInstance::startServer()
     updateServerSubMetaTopic();
     updateServerPubMetaTopic();
 
-    publishTopic("/SmartDashboard/testvalue", {(int64_t)0}, {.retained = true, .cached = true});
-
     flushText();
     flushBinary();
 }
@@ -1198,35 +1196,38 @@ bool NetworkTableInstance::isSubscribed(Subscription *subscription, std::string 
     return false;
 }
 
-bool NetworkTableInstance::isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, Subscription **out_subscription)
+bool NetworkTableInstance::isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, bool requireNotTopicsOnly, Subscription **out_subscription)
 {
     for (auto sub : subscriptions)
     {
-        for (auto top : sub.second->topics)
+        if (!requireNotTopicsOnly || !sub.second->options.topicsonly)
         {
-            if (sub.second->options.prefix)
+            for (auto top : sub.second->topics)
             {
-                if (name.starts_with('$'))
+                if (sub.second->options.prefix)
                 {
-                    if (top.starts_with('$') && name.starts_with(top))
+                    if (name.starts_with('$'))
+                    {
+                        if (top.starts_with('$') && name.starts_with(top))
+                        {
+                            if (out_subscription != nullptr)
+                                *out_subscription = sub.second;
+                            return true;
+                        }
+                    }
+                    else if (top.length() == 0 || name.starts_with(top))
                     {
                         if (out_subscription != nullptr)
                             *out_subscription = sub.second;
                         return true;
                     }
                 }
-                else if (top.length() == 0 || name.starts_with(top))
+                else if (name == top)
                 {
                     if (out_subscription != nullptr)
                         *out_subscription = sub.second;
                     return true;
                 }
-            }
-            else if (name == top)
-            {
-                if (out_subscription != nullptr)
-                    *out_subscription = sub.second;
-                return true;
             }
         }
     }
@@ -1435,9 +1436,13 @@ size_t NetworkTableInstance::nextClientWithName(std::string_view name)
 
 void NetworkTableInstance::publishInitialValues(const Guid &guid)
 {
-    for (auto topic : clients[guid]->topicData)
+    auto client = clients[guid];
+    assert(client != nullptr);
+
+    for (auto topic : client->topicData)
     {
-        if (!topic.second.initialPublish)
+        // send updates for unpublished and only! subscribed-value topics
+        if (!topic.second.initialPublish && isSubscribed(client->subscriptions, topic.first, true /* requireNotTopicsOnly */))
         {
             sendTopicUpdate(guid, topics[topic.first]);
         }
@@ -1676,18 +1681,120 @@ void NetworkTableInstance::updateTopicPubMetaTopic(std::string name)
     sendTopicUpdate(t);
 }
 
-void NetworkTableInstance::setTestValue(int64_t value)
+// void NetworkTableInstance::setTestValue(int64_t value)
+// {
+//     auto t = topics["/SmartDashboard/testvalue"s];
+//     assert(t != nullptr);
+//     t->value.i = value;
+//     sendTopicUpdate(t);
+//     flushBinary();
+// }
+
+// int64_t NetworkTableInstance::getTestValue()
+// {
+//     auto t = topics["/SmartDashboard/testvalue"s];
+//     assert(t != nullptr);
+//     return t->value.i;
+// }
+
+void NetworkTableInstance::subscribe(std::vector<std::string> topics, int32_t subuid, SubscriptionOptions options)
 {
-    auto t = topics["/SmartDashboard/testvalue"s];
-    assert(t != nullptr);
-    t->value.i = value;
-    sendTopicUpdate(t);
-    flushBinary();
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
 }
 
-int64_t NetworkTableInstance::getTestValue()
+void NetworkTableInstance::unsubscribe(int32_t subuid)
 {
-    auto t = topics["/SmartDashboard/testvalue"s];
-    assert(t != nullptr);
-    return t->value.i;
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+NetworkTableInstance::AnnouncedTopic NetworkTableInstance::publish(std::string name, int32_t pubuid, NTDataType type, TopicProperties properties)
+{
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void NetworkTableInstance::unpublish(int32_t pubuid)
+{
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+NetworkTableInstance::TopicProperties NetworkTableInstance::setProperties(std::string name, TopicProperties update)
+{
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
+{
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
 }
