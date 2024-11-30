@@ -1634,7 +1634,7 @@ void NetworkTableInstance::updateTopicSubMetaTopic(std::string name)
     for (auto client : clients)
     {
         Subscription *sub;
-        if (isSubscribed(client.second->subscriptions, name, &sub))
+        if (isSubscribed(client.second->subscriptions, name, false, &sub))
         {
             subs.push_back(TopicSubscription(client.second->name, sub->uid, sub->options));
         }
@@ -1744,7 +1744,7 @@ NetworkTableInstance::AnnouncedTopic NetworkTableInstance::publish(std::string n
         break;
     }
     default:
-        break;
+        return AnnouncedTopic({}, -1, NTDataType::Bool, properties);
     }
 }
 
@@ -1778,7 +1778,7 @@ NetworkTableInstance::TopicProperties NetworkTableInstance::setProperties(std::s
         break;
     }
     default:
-        break;
+        return update;
     }
 }
 
