@@ -526,7 +526,14 @@ void NetworkTableInstance::startServer()
     serverTimeOffset = 0;
     server = new WsServer(NT4_SERVER_PORT);
     server->callbackArgs = this;
-    thisClient = {};
+    thisClient = {
+        .guid = Guid(),
+        .name = "fake_server"s,
+        .subscriptions = {},
+        .publishers = {},
+        .topicData = {}};
+    this->topics = {};
+    this->clients = {{thisClient.guid, &thisClient}};
 
     // Accept NT_PROTOCOL only
     server->protocolCallback = [](const std::vector<std::string> &requestedProtocols, void *args) -> std::string_view
@@ -1025,6 +1032,46 @@ bool NetworkTableInstance::sendRTT()
     return client->send(packer.vector());
 }
 
+NetworkTableInstance::AnnouncedTopic NetworkTableInstance::announceTopicSelfSync(const Topic *topic, bool *out_success)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    if (!thisClient.topicData.contains(topic->name))
+    {
+        thisClient.topicData[topic->name] = {
+            thisClient.nextTopicIdAssigned++,
+            false};
+    }
+    else
+    {
+        // TODO: reannouncement responds with the old id for now
+    }
+
+    int64_t id = thisClient.topicData[topic->name].id;
+
+    AnnouncedTopic t{
+        topic->name,
+        id,
+        topic->value.type,
+        topic->properties};
+    *out_success = true;
+    return t;
+}
+
+bool NetworkTableInstance::announceTopicSelf(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    bool success;
+    AnnouncedTopic t = announceTopicSelfSync(topic, &success);
+
+    if (success && topicAnnouncedCallback)
+    {
+        return topicAnnouncedCallback(this, t, callbackArgs);
+    }
+    return true;
+}
+
 bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic)
 {
     assert(networkMode == NetworkMode::Server);
@@ -1114,6 +1161,23 @@ bool NetworkTableInstance::announceTopic(const Guid &guid, const Topic *topic, i
     return true;
 }
 
+bool NetworkTableInstance::unannounceTopicSelf(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+
+    if (!thisClient.topicData.contains(topic->name))
+    {
+        return false;
+    }
+
+    int64_t id = thisClient.topicData[topic->name].id;
+    if (topicUnAnnouncedCallback)
+    {
+        return topicUnAnnouncedCallback(this, topic->name, id, callbackArgs);
+    }
+    return true;
+}
+
 bool NetworkTableInstance::unannounceTopic(const Guid &guid, const Topic *topic)
 {
     assert(networkMode == NetworkMode::Server);
@@ -1136,6 +1200,16 @@ bool NetworkTableInstance::unannounceTopic(const Guid &guid, const Topic *topic)
     if (client->textCache.length() > 0)
         client->textCache.append(","sv); // comma separator
     client->textCache.append(text);
+    return true;
+}
+
+bool NetworkTableInstance::sendPropertyUpdateSelf(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+    if (topicPropertiesUpdateCallback)
+    {
+        return topicPropertiesUpdateCallback(this, topic->name, topic->properties, callbackArgs);
+    }
     return true;
 }
 
@@ -1241,10 +1315,19 @@ bool NetworkTableInstance::announceTopic(const Topic *topic)
     bool ok = true;
     for (auto client : clients)
     {
+        assert(client.second != nullptr);
         if (isSubscribed(client.second->subscriptions, topic->name))
         {
-            if (!announceTopic(client.first, topic))
-                ok = false;
+            if (isSelf(client.second))
+            {
+                if (!announceTopicSelf(topic))
+                    ok = false;
+            }
+            else
+            {
+                if (!announceTopic(client.first, topic))
+                    ok = false;
+            }
         }
     }
     return ok;
@@ -1256,6 +1339,7 @@ bool NetworkTableInstance::announceTopic(const Topic *topic, const Guid &publish
     bool ok = true;
     for (auto client : clients)
     {
+        assert(client.second != nullptr);
         if (client.first == publisherGuid)
         {
             if (!announceTopic(client.first, topic, pubuid))
@@ -1263,7 +1347,31 @@ bool NetworkTableInstance::announceTopic(const Topic *topic, const Guid &publish
         }
         else if (isSubscribed(client.second->subscriptions, topic->name))
         {
-            if (!announceTopic(client.first, topic))
+            if (isSelf(client.second))
+            {
+                if (!announceTopicSelf(topic))
+                    ok = false;
+            }
+            else
+            {
+                if (!announceTopic(client.first, topic))
+                    ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+bool NetworkTableInstance::announceCachedTopicsSelf()
+{
+    assert(networkMode == NetworkMode::Server);
+    bool ok = true;
+
+    for (auto topic : topics)
+    {
+        if (topic.second->properties.cached && isSubscribed(thisClient.subscriptions, topic.second->name))
+        {
+            if (!announceTopicSelf(topic.second)) // announce topic if cached and subscribed
                 ok = false;
         }
     }
@@ -1293,13 +1401,36 @@ bool NetworkTableInstance::unannounceTopic(const Topic *topic)
     bool ok = true;
     for (auto client : clients)
     {
+        assert(client.second != nullptr);
         if (isSubscribed(client.second->subscriptions, topic->name))
         {
-            if (!unannounceTopic(client.first, topic))
-                ok = false;
+            if (isSelf(client.second))
+            {
+                if (!unannounceTopicSelf(topic))
+                    ok = false;
+            }
+            else
+            {
+                if (!unannounceTopic(client.first, topic))
+                    ok = false;
+            }
         }
     }
     return ok;
+}
+
+bool NetworkTableInstance::sendTopicUpdateSelf(const Topic *topic)
+{
+    assert(networkMode == NetworkMode::Server);
+    if (topicUpdateCallback)
+    {
+        int64_t id = thisClient.topicData[topic->name].id;
+        uint64_t timestamp = getServerTime();
+        NTDataValue value = NTDataValue(topic->value.getAPIType()); // empty value of API type
+        value.assign(topic->value);                                 // copy the data
+        return topicUpdateCallback(this, id, timestamp, value, callbackArgs);
+    }
+    return true;
 }
 
 bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
@@ -1333,13 +1464,22 @@ bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
 
     for (auto client : clients)
     {
+        assert(client.second != nullptr);
         if (client.second->topicData.contains(topic->name))
         {
             auto t = client.second->topicData[topic->name];
             if (t.initialPublish)
             {
-                if (!sendTopicUpdate(client.first, topic))
-                    return false;
+                if (isSelf(client.second))
+                {
+                    if (!sendTopicUpdateSelf(topic))
+                        return false;
+                }
+                else
+                {
+                    if (!sendTopicUpdate(client.first, topic))
+                        return false;
+                }
             }
         }
     }
@@ -1364,6 +1504,35 @@ bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, Top
     }
 
     return true;
+}
+
+NetworkTableInstance::AnnouncedTopic NetworkTableInstance::publishTopicSelfSync(std::string name, NTDataValue value, TopicProperties properties, bool *out_success)
+{
+    Topic *topic = getOrCreateTopic(name, value, properties);
+    AnnouncedTopic t = {{}, -1, NTDataType::Bool, {}};
+    *out_success = false;
+
+    if (!announceTopic(topic))
+        return t;
+
+    if (!name.starts_with('$'))
+    {
+        if (!publishTopic("$sub$"s + name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}), {.retained = true, .cached = true}))
+            return t;
+        if (!publishTopic("$pub$"s + name, NTDataValue(NTDataType::Msgpack, std::vector<uint8_t>{}), {.retained = true, .cached = true}))
+            return t;
+        updateTopicSubMetaTopic(name);
+        updateTopicPubMetaTopic(name);
+    }
+
+    int64_t id = thisClient.topicData[topic->name].id;
+
+    *out_success = true;
+    return {
+        topic->name,
+        id,
+        topic->value.type,
+        topic->properties};
 }
 
 bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, const Guid &publisherGuid, int32_t pubuid, TopicProperties properties)
@@ -1391,10 +1560,19 @@ bool NetworkTableInstance::updateTopicProperties(const Topic *topic)
     bool ok = true;
     for (auto client : clients)
     {
+        assert(client.second != nullptr);
         if (isSubscribed(client.second->subscriptions, topic->name))
         {
-            if (!sendPropertyUpdate(client.first, topic, false))
-                ok = false;
+            if (isSelf(client.second))
+            {
+                if (!sendPropertyUpdateSelf(topic))
+                    ok = false;
+            }
+            else
+            {
+                if (!sendPropertyUpdate(client.first, topic, false))
+                    ok = false;
+            }
         }
     }
     return ok;
@@ -1408,8 +1586,16 @@ bool NetworkTableInstance::updateTopicProperties(const Topic *topic, const Guid 
     {
         if (isSubscribed(client.second->subscriptions, topic->name))
         {
-            if (!sendPropertyUpdate(client.first, topic, client.first == updaterGuid))
-                ok = false;
+            if (isSelf(client.second))
+            {
+                if (!sendPropertyUpdateSelf(topic))
+                    ok = false;
+            }
+            else
+            {
+                if (!sendPropertyUpdate(client.first, topic, client.first == updaterGuid))
+                    ok = false;
+            }
         }
     }
     return ok;
@@ -1421,7 +1607,7 @@ size_t NetworkTableInstance::nextClientWithName(std::string_view name)
 
     for (auto client : clients)
     {
-        if (client.second->name.starts_with(name) && client.second->name.find('@') == name.length())
+        if (!isSelf(client.second) && client.second->name.starts_with(name) && client.second->name.find('@') == name.length())
         {
             size_t i;
             if (std::from_chars(client.second->name.data() + name.length() + 1, client.second->name.data() + client.second->name.size(), i).ec != std::errc::invalid_argument)
@@ -1432,6 +1618,18 @@ size_t NetworkTableInstance::nextClientWithName(std::string_view name)
     }
 
     return num;
+}
+
+void NetworkTableInstance::publishInitialValuesSelf()
+{
+    for (auto topic : thisClient.topicData)
+    {
+        // send updates for unpublished and only! subscribed-value topics
+        if (!topic.second.initialPublish && isSubscribed(thisClient.subscriptions, topic.first, true /* requireNotTopicsOnly */))
+        {
+            sendTopicUpdateSelf(topics[topic.first]);
+        }
+    }
 }
 
 void NetworkTableInstance::publishInitialValues(const Guid &guid)
@@ -1544,8 +1742,17 @@ struct ClientsMetaTopic
 
 void NetworkTableInstance::updateClientsMetaTopic()
 {
+    size_t clientCount = 0;
+    for (auto client : server->clients)
+    {
+        if (clients.contains(client->guid))
+        {
+            clientCount++;
+        }
+    }
+
     auto packer = msgpack::Packer<true>();
-    packer.pack_array_header(clients.size());
+    packer.pack_array_header(clientCount);
     for (auto client : server->clients)
     {
         if (clients.contains(client->guid))
@@ -1634,7 +1841,7 @@ void NetworkTableInstance::updateTopicSubMetaTopic(std::string name)
     for (auto client : clients)
     {
         Subscription *sub;
-        if (isSubscribed(client.second->subscriptions, name, false, &sub))
+        if (!isSelf(client.second) && isSubscribed(client.second->subscriptions, name, false, &sub))
         {
             subs.push_back(TopicSubscription(client.second->name, sub->uid, sub->options));
         }
@@ -1659,11 +1866,14 @@ void NetworkTableInstance::updateTopicPubMetaTopic(std::string name)
 
     for (auto client : clients)
     {
-        for (auto pub : client.second->publishers)
+        if (!isSelf(client.second))
         {
-            if (pub.second->topic == name)
+            for (auto pub : client.second->publishers)
             {
-                pubs.push_back(TopicPublisher(client.second->name, pub.second->uid));
+                if (pub.second->topic == name)
+                {
+                    pubs.push_back(TopicPublisher(client.second->name, pub.second->uid));
+                }
             }
         }
     }
@@ -1681,28 +1891,26 @@ void NetworkTableInstance::updateTopicPubMetaTopic(std::string name)
     sendTopicUpdate(t);
 }
 
-// void NetworkTableInstance::setTestValue(int64_t value)
-// {
-//     auto t = topics["/SmartDashboard/testvalue"s];
-//     assert(t != nullptr);
-//     t->value.i = value;
-//     sendTopicUpdate(t);
-//     flushBinary();
-// }
-
-// int64_t NetworkTableInstance::getTestValue()
-// {
-//     auto t = topics["/SmartDashboard/testvalue"s];
-//     assert(t != nullptr);
-//     return t->value.i;
-// }
-
 void NetworkTableInstance::subscribe(std::vector<std::string> topics, int32_t subuid, SubscriptionOptions options)
 {
     switch (networkMode)
     {
     case NetworkMode::Server:
     {
+        if (!thisClient.subscriptions[subuid])
+        {
+            thisClient.subscriptions[subuid] = new Subscription(subuid, topics, options);
+        }
+        else
+        {
+            thisClient.subscriptions[subuid]->uid = subuid;
+            thisClient.subscriptions[subuid]->topics = topics;
+            thisClient.subscriptions[subuid]->options = options;
+        }
+
+        updateServerSubMetaTopic();
+        announceCachedTopicsSelf();
+        publishInitialValuesSelf();
         break;
     }
     case NetworkMode::Client:
@@ -1720,6 +1928,13 @@ void NetworkTableInstance::unsubscribe(int32_t subuid)
     {
     case NetworkMode::Server:
     {
+        auto sub = thisClient.subscriptions[subuid];
+        if (sub != nullptr)
+        {
+            thisClient.subscriptions.erase(subuid);
+            updateServerSubMetaTopic();
+            delete sub;
+        }
         break;
     }
     case NetworkMode::Client:
@@ -1737,7 +1952,31 @@ NetworkTableInstance::AnnouncedTopic NetworkTableInstance::publish(std::string n
     {
     case NetworkMode::Server:
     {
-        break;
+        if (!thisClient.publishers[pubuid])
+        {
+            thisClient.publishers[pubuid] = new Publisher(pubuid, name);
+        }
+        else
+        {
+            thisClient.publishers[pubuid]->uid = pubuid;
+            thisClient.publishers[pubuid]->topic = name;
+        }
+
+        AnnouncedTopic topic = {{}, -1, NTDataType::Bool, {}};
+        bool success;
+
+        if (!this->topics.contains(name))
+        {
+            topic = publishTopicSelfSync(name, NTDataValue(type), properties, &success);
+        }
+        else
+        {
+            // topic already published, just respond to client
+            topic = announceTopicSelfSync(this->topics[name], &success);
+        }
+
+        updateServerPubMetaTopic();
+        return topic;
     }
     case NetworkMode::Client:
     {
@@ -1754,6 +1993,13 @@ void NetworkTableInstance::unpublish(int32_t pubuid)
     {
     case NetworkMode::Server:
     {
+        auto pub = thisClient.publishers[pubuid];
+        if (pub != nullptr)
+        {
+            thisClient.publishers.erase(pubuid);
+            updateServerPubMetaTopic();
+            delete pub;
+        }
         break;
     }
     case NetworkMode::Client:
@@ -1771,7 +2017,14 @@ NetworkTableInstance::TopicProperties NetworkTableInstance::setProperties(std::s
     {
     case NetworkMode::Server:
     {
-        break;
+        auto top = this->topics[name];
+
+        if (top != nullptr)
+        {
+            top->properties = update;
+            updateTopicProperties(top);
+        }
+        return update;
     }
     case NetworkMode::Client:
     {
@@ -1788,6 +2041,34 @@ void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
     {
     case NetworkMode::Server:
     {
+        auto publisher = thisClient.publishers[id];
+        if (publisher != nullptr)
+        {
+            auto topic = topics[publisher->topic];
+            if (topic != nullptr)
+            {
+                topic->value.assign(value);
+                sendTopicUpdate(topic);
+            }
+        }
+        break;
+    }
+    case NetworkMode::Client:
+    {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void NetworkTableInstance::flush()
+{
+    switch (networkMode)
+    {
+    case NetworkMode::Server:
+    {
+        flushBinary();
         break;
     }
     case NetworkMode::Client:

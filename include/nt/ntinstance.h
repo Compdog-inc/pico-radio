@@ -138,11 +138,11 @@ public:
     struct AnnouncedTopic
     {
         std::string name;
-        int32_t id;
+        int64_t id;
         NTDataType type;
         TopicProperties properties;
 
-        AnnouncedTopic(std::string name, int32_t id, NTDataType type, TopicProperties properties) : name(name), id(id), type(type), properties(properties)
+        AnnouncedTopic(std::string name, int64_t id, NTDataType type, TopicProperties properties) : name(name), id(id), type(type), properties(properties)
         {
         }
     };
@@ -283,22 +283,30 @@ private:
     bool isSubscribed(Subscription *subscription, std::string name);
     bool isSubscribed(const std::unordered_map<int32_t, Subscription *> &subscriptions, std::string name, bool requireNotTopicsOnly = false, Subscription **out_subscription = nullptr);
 
+    AnnouncedTopic announceTopicSelfSync(const Topic *topic, bool *out_success);
+    bool announceTopicSelf(const Topic *topic);
     bool announceTopic(const Guid &guid, const Topic *topic);
     bool announceTopic(const Guid &guid, const Topic *topic, int32_t pubuid);
     bool announceTopic(const Topic *topic);
     bool announceTopic(const Topic *topic, const Guid &publisherGuid, int32_t pubuid);
+    bool announceCachedTopicsSelf();
     bool announceCachedTopics(const Guid &guid);
 
+    bool unannounceTopicSelf(const Topic *topic);
     bool unannounceTopic(const Guid &guid, const Topic *topic);
     bool unannounceTopic(const Topic *topic);
 
+    bool sendTopicUpdateSelf(const Topic *topic);
     bool sendTopicUpdate(const Topic *topic);
     bool sendTopicUpdate(const Guid &guid, const Topic *topic);
+    void publishInitialValuesSelf();
     void publishInitialValues(const Guid &guid);
 
     bool publishTopic(std::string name, NTDataValue value, TopicProperties properties = TopicProperties_DEFAULT);
+    AnnouncedTopic publishTopicSelfSync(std::string name, NTDataValue value, TopicProperties properties, bool *out_success);
     bool publishTopic(std::string name, NTDataValue value, const Guid &publisherGuid, int32_t pubuid, TopicProperties properties = TopicProperties_DEFAULT);
 
+    bool sendPropertyUpdateSelf(const Topic *topic);
     bool sendPropertyUpdate(const Guid &guid, const Topic *topic, bool ack);
 
     bool updateTopicProperties(const Topic *topic);
@@ -317,7 +325,8 @@ private:
     {
         for (auto client : clients)
         {
-            flushText(client.second);
+            if (!isSelf(client.second))
+                flushText(client.second);
         }
     }
 
@@ -332,7 +341,8 @@ private:
     {
         for (auto client : clients)
         {
-            flushBinary(client.second);
+            if (!isSelf(client.second))
+                flushBinary(client.second);
         }
     }
 
@@ -354,6 +364,27 @@ public:
     void unpublish(int32_t pubuid);
     TopicProperties setProperties(std::string name, TopicProperties update);
     void updateTopic(int32_t id, NTDataValue value);
+    void flush();
+
+    /// @brief Custom args for the NetworkTable callbacks, set by the user
+    void *callbackArgs = nullptr;
+
+    /// @brief Callback for topic updates, contains the NetworkTable instance, id of the topic, timestamp, and value
+    typedef bool (*NTTopicUpdateCallback)(NetworkTableInstance *nt, int64_t id, uint64_t timestamp, const NTDataValue &value, void *args);
+    /// @brief Called whenever a topic is updated
+    NTTopicUpdateCallback topicUpdateCallback = nullptr;
+    /// @brief Callback for topic announcements, contains the NetworkTable instance, and the announced topic
+    typedef bool (*NTTopicAnnouncedCallback)(NetworkTableInstance *nt, const AnnouncedTopic &topic, void *args);
+    /// @brief Called whenever a topic is announced
+    NTTopicAnnouncedCallback topicAnnouncedCallback = nullptr;
+    /// @brief Callback for topic unannouncements, contains the NetworkTable instance, name of the topic, and the id of the topic
+    typedef bool (*NTTopicUnAnnouncedCallback)(NetworkTableInstance *nt, const std::string &name, int64_t id, void *args);
+    /// @brief Called whenever a topic is unannounced
+    NTTopicUnAnnouncedCallback topicUnAnnouncedCallback = nullptr;
+    /// @brief Callback for topic property updates, contains the NetworkTable instance, name of the topic, and the new properties
+    typedef bool (*NTTopicPropertiesUpdateCallback)(NetworkTableInstance *nt, const std::string &name, TopicProperties properties, void *args);
+    /// @brief Called whenever a topic property is updated
+    NTTopicPropertiesUpdateCallback topicPropertiesUpdateCallback = nullptr;
 };
 
 #endif
