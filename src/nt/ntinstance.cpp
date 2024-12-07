@@ -503,26 +503,35 @@ void NTDataValue::assign(const NTDataValue &other)
 static constexpr int NT4_SERVER_PORT = 5810;
 static constexpr std::string_view NT_PROTOCOL = "v4.1.networktables.first.wpi.edu"sv;
 
+static constexpr TickType_t MUTEX_TIMEOUT = 1000;
+
 NetworkTableInstance::NetworkTableInstance() : networkMode(NetworkMode::Starting), serverTimeOffset(0)
 {
+    stateMutex = xSemaphoreCreateMutex();
 }
 
 NetworkTableInstance::~NetworkTableInstance()
 {
     close();
+    vSemaphoreDelete(stateMutex);
 }
 
 void NetworkTableInstance::startClient(std::string_view url)
 {
     stop();
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     networkMode = NetworkMode::Client;
     client = new WebSocket(url, {std::string(NT_PROTOCOL)});
     client->callbackArgs = this;
+    xSemaphoreGive(stateMutex);
 }
 
 void NetworkTableInstance::startServer()
 {
     stop();
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     serverTimeOffset = 0;
     server = new WsServer(NT4_SERVER_PORT);
     server->callbackArgs = this;
@@ -599,6 +608,7 @@ void NetworkTableInstance::startServer()
 
     flushText();
     flushBinary();
+    xSemaphoreGive(stateMutex);
 }
 
 void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &frame)
@@ -682,6 +692,8 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     }
                 }
 
+                if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+                    return;
                 if (!clients[guid]->subscriptions[subuid])
                 {
                     clients[guid]->subscriptions[subuid] = new Subscription(subuid, topics, options);
@@ -707,6 +719,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                 }
 
                 announceCachedTopics(guid);
+                xSemaphoreGive(stateMutex);
                 break;
             }
             case MessageMethod::Publish:
@@ -759,6 +772,8 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     }
                 }
 
+                if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+                    return;
                 if (!clients[guid]->publishers[pubuid])
                 {
                     clients[guid]->publishers[pubuid] = new Publisher(pubuid, topic);
@@ -781,6 +796,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
                 updateClientPubMetaTopic(guid);
                 updateTopicPubMetaTopic(topic);
+                xSemaphoreGive(stateMutex);
                 break;
             }
             case MessageMethod::UnSubscribe:
@@ -795,6 +811,8 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     subuid = unpacker.unpack_int();
                 }
 
+                if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+                    return;
                 auto sub = clients[guid]->subscriptions[subuid];
                 if (sub != nullptr)
                 {
@@ -815,6 +833,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
                     delete sub;
                 }
+                xSemaphoreGive(stateMutex);
                 break;
             }
             case MessageMethod::UnPublish:
@@ -829,6 +848,8 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     pubuid = unpacker.unpack_int();
                 }
 
+                if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+                    return;
                 auto pub = clients[guid]->publishers[pubuid];
                 if (pub != nullptr)
                 {
@@ -837,6 +858,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     updateTopicPubMetaTopic(pub->topic);
                     delete pub;
                 }
+                xSemaphoreGive(stateMutex);
                 break;
             }
             case MessageMethod::SetProperties:
@@ -883,6 +905,8 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     }
                 }
 
+                if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+                    return;
                 auto top = this->topics[topic];
 
                 if (top != nullptr)
@@ -897,6 +921,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
                     updateTopicProperties(top, guid);
                 }
+                xSemaphoreGive(stateMutex);
 
                 break;
             }
@@ -909,9 +934,12 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
 
         unpacker.unpack_array_end();
 
+        if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+            return;
         flushText();
         publishInitialValues(guid);
         flushBinary();
+        xSemaphoreGive(stateMutex);
         break;
     }
     case WebSocketOpCode::BinaryFrame:
@@ -983,6 +1011,8 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     {
                     case NetworkMode::Server:
                     {
+                        if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+                            return;
                         auto client = clients[guid];
                         auto publisher = client->publishers[id];
                         if (publisher != nullptr)
@@ -996,6 +1026,7 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                         }
 
                         flushBinary();
+                        xSemaphoreGive(stateMutex);
                         break;
                     }
                     case NetworkMode::Client:
@@ -1662,6 +1693,8 @@ void NetworkTableInstance::publishInitialValues(const Guid &guid)
 
 void NetworkTableInstance::stop()
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     switch (networkMode)
     {
     case NetworkMode::Client:
@@ -1683,6 +1716,7 @@ void NetworkTableInstance::stop()
     }
 
     networkMode = NetworkMode::Starting;
+    xSemaphoreGive(stateMutex);
 }
 
 void NetworkTableInstance::close()
@@ -1906,6 +1940,8 @@ void NetworkTableInstance::updateTopicPubMetaTopic(std::string name)
 
 void NetworkTableInstance::subscribe(std::vector<std::string> topics, int32_t subuid, SubscriptionOptions options)
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -1933,10 +1969,13 @@ void NetworkTableInstance::subscribe(std::vector<std::string> topics, int32_t su
     default:
         break;
     }
+    xSemaphoreGive(stateMutex);
 }
 
 void NetworkTableInstance::unsubscribe(int32_t subuid)
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -1957,10 +1996,13 @@ void NetworkTableInstance::unsubscribe(int32_t subuid)
     default:
         break;
     }
+    xSemaphoreGive(stateMutex);
 }
 
 NetworkTableInstance::AnnouncedTopic NetworkTableInstance::publish(std::string name, int32_t pubuid, NTDataType type, TopicProperties properties)
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return AnnouncedTopic({}, -1, NTDataType::Bool, properties);
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -1989,19 +2031,24 @@ NetworkTableInstance::AnnouncedTopic NetworkTableInstance::publish(std::string n
         }
 
         updateServerPubMetaTopic();
+        xSemaphoreGive(stateMutex);
         return topic;
     }
     case NetworkMode::Client:
     {
-        break;
+        xSemaphoreGive(stateMutex);
+        return AnnouncedTopic({}, -1, NTDataType::Bool, properties);
     }
     default:
+        xSemaphoreGive(stateMutex);
         return AnnouncedTopic({}, -1, NTDataType::Bool, properties);
     }
 }
 
 void NetworkTableInstance::unpublish(int32_t pubuid)
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -2022,10 +2069,14 @@ void NetworkTableInstance::unpublish(int32_t pubuid)
     default:
         break;
     }
+    xSemaphoreGive(stateMutex);
 }
 
 NetworkTableInstance::TopicProperties NetworkTableInstance::setProperties(std::string name, TopicProperties update)
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return update;
+
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -2037,19 +2088,24 @@ NetworkTableInstance::TopicProperties NetworkTableInstance::setProperties(std::s
             top->properties = update;
             updateTopicProperties(top);
         }
+        xSemaphoreGive(stateMutex);
         return update;
     }
     case NetworkMode::Client:
     {
-        break;
+        xSemaphoreGive(stateMutex);
+        return update;
     }
     default:
+        xSemaphoreGive(stateMutex);
         return update;
     }
 }
 
 void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value, uint64_t time)
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -2073,6 +2129,7 @@ void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value, uint64_t t
     default:
         break;
     }
+    xSemaphoreGive(stateMutex);
 }
 
 void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
@@ -2082,6 +2139,8 @@ void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
 
 void NetworkTableInstance::flush()
 {
+    if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
+        return;
     switch (networkMode)
     {
     case NetworkMode::Server:
@@ -2096,4 +2155,5 @@ void NetworkTableInstance::flush()
     default:
         break;
     }
+    xSemaphoreGive(stateMutex);
 }

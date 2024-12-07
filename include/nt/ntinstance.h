@@ -3,6 +3,10 @@
 
 #include <string>
 #include <unordered_map>
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+#include <vector>
 
 #include "../msgpack/msgpack.hpp"
 
@@ -151,6 +155,9 @@ private:
     WsServer *server;
     WebSocket *client;
     NetworkMode networkMode;
+
+    /// @brief Mutex to prevent multithreaded internal state access
+    SemaphoreHandle_t stateMutex;
 
     struct Topic
     {

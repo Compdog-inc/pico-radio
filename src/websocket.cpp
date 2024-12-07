@@ -197,6 +197,7 @@ bool WebSocket::initiateHandshake(std::string_view path, std::string_view host, 
 WebSocket::~WebSocket()
 {
     disconnect();
+    vSemaphoreDelete(sendMutex);
 }
 
 void WebSocket::disconnect()
