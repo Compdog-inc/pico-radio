@@ -389,11 +389,11 @@ NTDataValue::NTDataValue(NTDataType type, std::string str) : type(type), str(str
 NTDataValue::NTDataValue(std::vector<uint8_t> bin) : type(NTDataType::Bin), bin(bin) {}
 NTDataValue::NTDataValue(NTDataType type, std::vector<uint8_t> bin) : type(type), bin(bin) {}
 NTDataValue::NTDataValue(uint64_t ui) : type(NTDataType::UInt), ui(ui) {}
-NTDataValue::NTDataValue(std::list<bool> bArray) : type(NTDataType::BoolArray), bArray(bArray) {}
-NTDataValue::NTDataValue(std::list<double> f64Array) : type(NTDataType::Float64Array), f64Array(f64Array) {}
-NTDataValue::NTDataValue(std::list<int64_t> iArray) : type(NTDataType::IntArray), iArray(iArray) {}
-NTDataValue::NTDataValue(std::list<float> f32Array) : type(NTDataType::Float32Array), f32Array(f32Array) {}
-NTDataValue::NTDataValue(std::list<std::string> strArray) : type(NTDataType::StrArray), strArray(strArray) {}
+NTDataValue::NTDataValue(std::vector<bool> bArray) : type(NTDataType::BoolArray), bArray(bArray) {}
+NTDataValue::NTDataValue(std::vector<double> f64Array) : type(NTDataType::Float64Array), f64Array(f64Array) {}
+NTDataValue::NTDataValue(std::vector<int64_t> iArray) : type(NTDataType::IntArray), iArray(iArray) {}
+NTDataValue::NTDataValue(std::vector<float> f32Array) : type(NTDataType::Float32Array), f32Array(f32Array) {}
+NTDataValue::NTDataValue(std::vector<std::string> strArray) : type(NTDataType::StrArray), strArray(strArray) {}
 
 NTDataValue::NTDataValue(const NTDataValue &other) : type(other.type)
 {
@@ -1419,21 +1419,25 @@ bool NetworkTableInstance::unannounceTopic(const Topic *topic)
     return ok;
 }
 
-bool NetworkTableInstance::sendTopicUpdateSelf(const Topic *topic)
+bool NetworkTableInstance::sendTopicUpdateSelf(const Topic *topic, uint64_t time)
 {
     assert(networkMode == NetworkMode::Server);
     if (topicUpdateCallback)
     {
         int64_t id = thisClient.topicData[topic->name].id;
-        uint64_t timestamp = getServerTime();
         NTDataValue value = NTDataValue(topic->value.getAPIType()); // empty value of API type
         value.assign(topic->value);                                 // copy the data
-        return topicUpdateCallback(this, id, timestamp, value, callbackArgs);
+        return topicUpdateCallback(this, id, time, value, callbackArgs);
     }
     return true;
 }
 
-bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
+bool NetworkTableInstance::sendTopicUpdateSelf(const Topic *topic)
+{
+    return sendTopicUpdateSelf(topic, getServerTime());
+}
+
+bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic, uint64_t time)
 {
     assert(networkMode == NetworkMode::Server);
 
@@ -1442,12 +1446,11 @@ bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
     assert(client != nullptr);
 
     int64_t id = client->topicData[topic->name].id;
-    uint64_t timestamp = getServerTime();
     uint8_t _type = (uint8_t)topic->value.getAPIType();
     packer.clear();
     packer.pack_array_header(4);
     packer.process(id);
-    packer.process(timestamp);
+    packer.process(time);
     packer.process(_type);
     topic->value.pack(packer);
     client->topicData[topic->name].initialPublish = true;
@@ -1458,7 +1461,12 @@ bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
     return true;
 }
 
-bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
+bool NetworkTableInstance::sendTopicUpdate(const Guid &guid, const Topic *topic)
+{
+    return sendTopicUpdate(guid, topic, getServerTime());
+}
+
+bool NetworkTableInstance::sendTopicUpdate(const Topic *topic, uint64_t time)
 {
     assert(networkMode == NetworkMode::Server);
 
@@ -1472,12 +1480,12 @@ bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
             {
                 if (isSelf(client.second))
                 {
-                    if (!sendTopicUpdateSelf(topic))
+                    if (!sendTopicUpdateSelf(topic, time))
                         return false;
                 }
                 else
                 {
-                    if (!sendTopicUpdate(client.first, topic))
+                    if (!sendTopicUpdate(client.first, topic, time))
                         return false;
                 }
             }
@@ -1485,6 +1493,11 @@ bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
     }
 
     return true;
+}
+
+bool NetworkTableInstance::sendTopicUpdate(const Topic *topic)
+{
+    return sendTopicUpdate(topic, getServerTime());
 }
 
 bool NetworkTableInstance::publishTopic(std::string name, NTDataValue value, TopicProperties properties)
@@ -2035,7 +2048,7 @@ NetworkTableInstance::TopicProperties NetworkTableInstance::setProperties(std::s
     }
 }
 
-void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
+void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value, uint64_t time)
 {
     switch (networkMode)
     {
@@ -2048,7 +2061,7 @@ void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
             if (topic != nullptr)
             {
                 topic->value.assign(value);
-                sendTopicUpdate(topic);
+                sendTopicUpdate(topic, time);
             }
         }
         break;
@@ -2060,6 +2073,11 @@ void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
     default:
         break;
     }
+}
+
+void NetworkTableInstance::updateTopic(int32_t id, NTDataValue value)
+{
+    updateTopic(id, value, getServerTime());
 }
 
 void NetworkTableInstance::flush()

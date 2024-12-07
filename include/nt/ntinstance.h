@@ -41,14 +41,14 @@ struct NTDataValue
         double f64;
         int64_t i;
         float f32;
-        std::string str;
         uint64_t ui;
     };
-    std::list<bool> bArray;
-    std::list<double> f64Array;
-    std::list<int64_t> iArray;
-    std::list<float> f32Array;
-    std::list<std::string> strArray;
+    std::string str;
+    std::vector<bool> bArray;
+    std::vector<double> f64Array;
+    std::vector<int64_t> iArray;
+    std::vector<float> f32Array;
+    std::vector<std::string> strArray;
     std::vector<uint8_t> bin;
 
     NTDataType getAPIType() const;
@@ -70,11 +70,11 @@ struct NTDataValue
     NTDataValue(std::vector<uint8_t> bin);
     NTDataValue(NTDataType type, std::vector<uint8_t> bin);
     NTDataValue(uint64_t ui);
-    NTDataValue(std::list<bool> bArray);
-    NTDataValue(std::list<double> f64Array);
-    NTDataValue(std::list<int64_t> iArray);
-    NTDataValue(std::list<float> f32Array);
-    NTDataValue(std::list<std::string> strArray);
+    NTDataValue(std::vector<bool> bArray);
+    NTDataValue(std::vector<double> f64Array);
+    NTDataValue(std::vector<int64_t> iArray);
+    NTDataValue(std::vector<float> f32Array);
+    NTDataValue(std::vector<std::string> strArray);
     NTDataValue(const NTDataValue &other);
     ~NTDataValue();
 };
@@ -296,8 +296,11 @@ private:
     bool unannounceTopic(const Guid &guid, const Topic *topic);
     bool unannounceTopic(const Topic *topic);
 
+    bool sendTopicUpdateSelf(const Topic *topic, uint64_t time);
     bool sendTopicUpdateSelf(const Topic *topic);
+    bool sendTopicUpdate(const Topic *topic, uint64_t time);
     bool sendTopicUpdate(const Topic *topic);
+    bool sendTopicUpdate(const Guid &guid, const Topic *topic, uint64_t time);
     bool sendTopicUpdate(const Guid &guid, const Topic *topic);
     void publishInitialValuesSelf();
     void publishInitialValues(const Guid &guid);
@@ -364,6 +367,7 @@ public:
     void unpublish(int32_t pubuid);
     TopicProperties setProperties(std::string name, TopicProperties update);
     void updateTopic(int32_t id, NTDataValue value);
+    void updateTopic(int32_t id, NTDataValue value, uint64_t time);
     void flush();
 
     /// @brief Custom args for the NetworkTable callbacks, set by the user
