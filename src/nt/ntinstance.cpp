@@ -564,6 +564,13 @@ void NetworkTableInstance::startServer()
                                 data->guid = entry->guid;
                                 std::size_t nameStart = entry->requestedPath.find("/nt/"sv) + 4;
                                 auto name = entry->requestedPath.substr(nameStart);
+                                
+                                if (!xSemaphoreTake(inst->stateMutex, MUTEX_TIMEOUT))
+                                {
+                                    delete data;
+                                    return;
+                                }
+
                                 data->name = name + "@"s + std::to_string(inst->nextClientWithName(name));
                                 data->publishers = {};
                                 data->subscriptions = {};
@@ -577,11 +584,16 @@ void NetworkTableInstance::startServer()
                                 inst->updateClientPubMetaTopic(entry->guid);
                                 inst->flushText(data);
                                 inst->publishInitialValues(entry->guid);
-                                inst->flushBinary(data); });
+                                inst->flushBinary(data);
+                                xSemaphoreGive(inst->stateMutex); });
 
     server->clientDisconnected.Add([](WsServer *server, const Guid &guid, WebSocketStatusCode statusCode, const std::string_view &reason, void *args)
                                    {
                                        NetworkTableInstance *inst = (NetworkTableInstance *)args;
+                                       
+                                        if (!xSemaphoreTake(inst->stateMutex, MUTEX_TIMEOUT))
+                                            return;
+                                    
                                        ClientData *data = inst->clients[guid];
                                        inst->clients.erase(guid);
                                        for (auto o : data->subscriptions)
@@ -590,7 +602,8 @@ void NetworkTableInstance::startServer()
                                            delete o.second;
                                        delete data;
                                        inst->updateClientsMetaTopic();
-                                       inst->flushBinary(); });
+                                       inst->flushBinary();
+                                       xSemaphoreGive(inst->stateMutex); });
 
     server->messageReceived.Add([](WsServer *server, const Guid &guid, const WebSocketFrame &frame, void *args)
                                 {
