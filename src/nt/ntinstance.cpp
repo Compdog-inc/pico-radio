@@ -450,6 +450,11 @@ NTDataValue::~NTDataValue()
 
 void NTDataValue::assign(const NTDataValue &other)
 {
+    assert(other.isValid());
+
+    if (!isValid()) // if currently invalid, fully acquire new value
+        type = other.type;
+
     if (getAPIType() == other.getAPIType()) // matching type is required
     {
         switch (other.type)
@@ -1507,7 +1512,9 @@ bool NetworkTableInstance::sendTopicUpdate(const Topic *topic, uint64_t time)
         if (client.second->topicData.contains(topic->name))
         {
             auto t = client.second->topicData[topic->name];
-            if (t.initialPublish)
+
+            // send updates for already published OR unpublished and only! subscribed-value topics
+            if (t.initialPublish || (!t.initialPublish && isSubscribed(client.second->subscriptions, topic->name, true /* requireNotTopicsOnly */)))
             {
                 if (isSelf(client.second))
                 {

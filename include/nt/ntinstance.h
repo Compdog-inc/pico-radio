@@ -33,7 +33,8 @@ enum class NTDataType : uint8_t
     Float64Array = 17,
     IntArray = 18,
     Float32Array = 19,
-    StrArray = 20
+    StrArray = 20,
+    Unassigned = 99 // [Null] implementation based (not part of api)
 };
 
 struct NTDataValue
@@ -56,6 +57,7 @@ struct NTDataValue
     std::vector<uint8_t> bin;
 
     NTDataType getAPIType() const;
+    inline bool isValid() const { return type != NTDataType::Unassigned; }
 
     void unpack(msgpack::Unpacker<false> &unpacker);
     void pack(msgpack::Packer<false> &packer) const;
