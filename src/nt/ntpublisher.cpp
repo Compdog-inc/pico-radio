@@ -16,7 +16,7 @@ NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValu
                                                                                                       nt,
                                                                                                       nt->publish(
                                                                                                           topic,
-                                                                                                          NEXT_PUBLISHER_ID++,
+                                                                                                          pubuid = NEXT_PUBLISHER_ID++,
                                                                                                           defaultValue.type,
                                                                                                           NetworkTableInstance::TopicProperties_DEFAULT))
 {
@@ -28,7 +28,7 @@ NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValu
                                                                                                                                                         nt,
                                                                                                                                                         nt->publish(
                                                                                                                                                             topic,
-                                                                                                                                                            NEXT_PUBLISHER_ID++,
+                                                                                                                                                            pubuid = NEXT_PUBLISHER_ID++,
                                                                                                                                                             defaultValue.type,
                                                                                                                                                             properties))
 {
@@ -42,7 +42,7 @@ NTPublisher::~NTPublisher()
 
 bool NTPublisher::close()
 {
-    nt->unpublish(topic.getId());
+    nt->unpublish(pubuid);
     return true;
 }
 
@@ -51,7 +51,7 @@ bool NTPublisher::set(NTDataValue value)
     if (topic.getType() != value.getAPIType())
         return false;
 
-    nt->updateTopic(topic.getId(), value);
+    nt->updateTopic(pubuid, value);
     return true;
 }
 
@@ -60,7 +60,7 @@ bool NTPublisher::set(NTDataValue value, uint64_t time)
     if (topic.getType() != value.getAPIType())
         return false;
 
-    nt->updateTopic(topic.getId(), value, time);
+    nt->updateTopic(pubuid, value, time);
     return true;
 }
 
@@ -69,7 +69,7 @@ bool NTPublisher::setBoolean(bool value)
     if (topic.getType() != NTDataType::Bool)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -78,7 +78,7 @@ bool NTPublisher::setBoolean(bool value, uint64_t time)
     if (topic.getType() != NTDataType::Bool)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -87,7 +87,7 @@ bool NTPublisher::setDouble(double value)
     if (topic.getType() != NTDataType::Float64)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -96,7 +96,7 @@ bool NTPublisher::setDouble(double value, uint64_t time)
     if (topic.getType() != NTDataType::Float64)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -105,7 +105,7 @@ bool NTPublisher::setFloat(float value)
     if (topic.getType() != NTDataType::Float32)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -114,7 +114,7 @@ bool NTPublisher::setFloat(float value, uint64_t time)
     if (topic.getType() != NTDataType::Float32)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -123,7 +123,7 @@ bool NTPublisher::setInt(int64_t value)
     if (topic.getType() != NTDataType::Int)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -132,7 +132,7 @@ bool NTPublisher::setInt(int64_t value, uint64_t time)
     if (topic.getType() != NTDataType::Int)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -141,7 +141,7 @@ bool NTPublisher::setUInt(uint64_t value)
     if (topic.getType() != NTDataType::Int && topic.getType() != NTDataType::UInt)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -150,7 +150,7 @@ bool NTPublisher::setUInt(uint64_t value, uint64_t time)
     if (topic.getType() != NTDataType::Int && topic.getType() != NTDataType::UInt)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -159,7 +159,7 @@ bool NTPublisher::setString(std::string value)
     if (topic.getType() != NTDataType::Str && topic.getType() != NTDataType::Json)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -168,7 +168,7 @@ bool NTPublisher::setString(std::string value, uint64_t time)
     if (topic.getType() != NTDataType::Str && topic.getType() != NTDataType::Json)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -177,7 +177,7 @@ bool NTPublisher::setBooleanArray(std::vector<bool> value)
     if (topic.getType() != NTDataType::BoolArray)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -186,7 +186,7 @@ bool NTPublisher::setBooleanArray(std::vector<bool> value, uint64_t time)
     if (topic.getType() != NTDataType::BoolArray)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -195,7 +195,7 @@ bool NTPublisher::setDoubleArray(std::vector<double> value)
     if (topic.getType() != NTDataType::Float64Array)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -204,7 +204,7 @@ bool NTPublisher::setDoubleArray(std::vector<double> value, uint64_t time)
     if (topic.getType() != NTDataType::Float64Array)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -213,7 +213,7 @@ bool NTPublisher::setFloatArray(std::vector<float> value)
     if (topic.getType() != NTDataType::Float32Array)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -222,7 +222,7 @@ bool NTPublisher::setFloatArray(std::vector<float> value, uint64_t time)
     if (topic.getType() != NTDataType::Float32Array)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -231,7 +231,7 @@ bool NTPublisher::setIntArray(std::vector<int64_t> value)
     if (topic.getType() != NTDataType::IntArray)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -240,7 +240,7 @@ bool NTPublisher::setIntArray(std::vector<int64_t> value, uint64_t time)
     if (topic.getType() != NTDataType::IntArray)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -249,7 +249,7 @@ bool NTPublisher::setStringArray(std::vector<std::string> value)
     if (topic.getType() != NTDataType::StrArray)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -258,7 +258,7 @@ bool NTPublisher::setStringArray(std::vector<std::string> value, uint64_t time)
     if (topic.getType() != NTDataType::StrArray)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }
 
@@ -267,7 +267,7 @@ bool NTPublisher::setRaw(std::vector<uint8_t> value)
     if (topic.getType() != NTDataType::Bin)
         return false;
 
-    nt->updateTopic(topic.getId(), {value});
+    nt->updateTopic(pubuid, {value});
     return true;
 }
 
@@ -276,6 +276,6 @@ bool NTPublisher::setRaw(std::vector<uint8_t> value, uint64_t time)
     if (topic.getType() != NTDataType::Bin)
         return false;
 
-    nt->updateTopic(topic.getId(), {value}, time);
+    nt->updateTopic(pubuid, {value}, time);
     return true;
 }

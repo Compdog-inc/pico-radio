@@ -45,6 +45,7 @@ public:
 private:
     NetworkTableInstance *nt;
     NTTopic topic;
+    int32_t pubuid;
 };
 
 #endif
