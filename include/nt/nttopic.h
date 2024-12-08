@@ -15,6 +15,7 @@ public:
     inline int64_t getId() const { return id; }
     inline NTDataType getType() const { return type; }
     inline NetworkTableInstance::TopicProperties getProperties() const { return properties; }
+    inline bool isValid() const { return id != -1; }
 
     void setProperties(NetworkTableInstance::TopicProperties properties);
 
