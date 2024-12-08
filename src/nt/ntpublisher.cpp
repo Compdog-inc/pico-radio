@@ -11,6 +11,11 @@ using namespace std::literals;
 
 static int32_t NEXT_PUBLISHER_ID = 0;
 
+NTPublisher::NTPublisher() : nt(nullptr),
+                             topic(nullptr)
+{
+}
+
 NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue) : nt(nt),
                                                                                                   topic(
                                                                                                       nt,
@@ -42,12 +47,14 @@ NTPublisher::~NTPublisher()
 
 bool NTPublisher::close()
 {
+    assert(nt != nullptr);
     nt->unpublish(pubuid);
     return true;
 }
 
 bool NTPublisher::set(NTDataValue value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != value.getAPIType())
         return false;
 
@@ -57,6 +64,7 @@ bool NTPublisher::set(NTDataValue value)
 
 bool NTPublisher::set(NTDataValue value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != value.getAPIType())
         return false;
 
@@ -66,6 +74,7 @@ bool NTPublisher::set(NTDataValue value, uint64_t time)
 
 bool NTPublisher::setBoolean(bool value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Bool)
         return false;
 
@@ -75,6 +84,7 @@ bool NTPublisher::setBoolean(bool value)
 
 bool NTPublisher::setBoolean(bool value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Bool)
         return false;
 
@@ -84,6 +94,7 @@ bool NTPublisher::setBoolean(bool value, uint64_t time)
 
 bool NTPublisher::setDouble(double value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float64)
         return false;
 
@@ -93,6 +104,7 @@ bool NTPublisher::setDouble(double value)
 
 bool NTPublisher::setDouble(double value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float64)
         return false;
 
@@ -102,6 +114,7 @@ bool NTPublisher::setDouble(double value, uint64_t time)
 
 bool NTPublisher::setFloat(float value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float32)
         return false;
 
@@ -111,6 +124,7 @@ bool NTPublisher::setFloat(float value)
 
 bool NTPublisher::setFloat(float value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float32)
         return false;
 
@@ -120,6 +134,7 @@ bool NTPublisher::setFloat(float value, uint64_t time)
 
 bool NTPublisher::setInt(int64_t value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Int)
         return false;
 
@@ -129,6 +144,7 @@ bool NTPublisher::setInt(int64_t value)
 
 bool NTPublisher::setInt(int64_t value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Int)
         return false;
 
@@ -138,6 +154,7 @@ bool NTPublisher::setInt(int64_t value, uint64_t time)
 
 bool NTPublisher::setUInt(uint64_t value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Int && topic.getType() != NTDataType::UInt)
         return false;
 
@@ -147,6 +164,7 @@ bool NTPublisher::setUInt(uint64_t value)
 
 bool NTPublisher::setUInt(uint64_t value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Int && topic.getType() != NTDataType::UInt)
         return false;
 
@@ -156,6 +174,7 @@ bool NTPublisher::setUInt(uint64_t value, uint64_t time)
 
 bool NTPublisher::setString(std::string value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Str && topic.getType() != NTDataType::Json)
         return false;
 
@@ -165,6 +184,7 @@ bool NTPublisher::setString(std::string value)
 
 bool NTPublisher::setString(std::string value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Str && topic.getType() != NTDataType::Json)
         return false;
 
@@ -174,6 +194,7 @@ bool NTPublisher::setString(std::string value, uint64_t time)
 
 bool NTPublisher::setBooleanArray(std::vector<bool> value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::BoolArray)
         return false;
 
@@ -183,6 +204,7 @@ bool NTPublisher::setBooleanArray(std::vector<bool> value)
 
 bool NTPublisher::setBooleanArray(std::vector<bool> value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::BoolArray)
         return false;
 
@@ -192,6 +214,7 @@ bool NTPublisher::setBooleanArray(std::vector<bool> value, uint64_t time)
 
 bool NTPublisher::setDoubleArray(std::vector<double> value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float64Array)
         return false;
 
@@ -201,6 +224,7 @@ bool NTPublisher::setDoubleArray(std::vector<double> value)
 
 bool NTPublisher::setDoubleArray(std::vector<double> value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float64Array)
         return false;
 
@@ -210,6 +234,7 @@ bool NTPublisher::setDoubleArray(std::vector<double> value, uint64_t time)
 
 bool NTPublisher::setFloatArray(std::vector<float> value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float32Array)
         return false;
 
@@ -219,6 +244,7 @@ bool NTPublisher::setFloatArray(std::vector<float> value)
 
 bool NTPublisher::setFloatArray(std::vector<float> value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Float32Array)
         return false;
 
@@ -228,6 +254,7 @@ bool NTPublisher::setFloatArray(std::vector<float> value, uint64_t time)
 
 bool NTPublisher::setIntArray(std::vector<int64_t> value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::IntArray)
         return false;
 
@@ -237,6 +264,7 @@ bool NTPublisher::setIntArray(std::vector<int64_t> value)
 
 bool NTPublisher::setIntArray(std::vector<int64_t> value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::IntArray)
         return false;
 
@@ -246,6 +274,7 @@ bool NTPublisher::setIntArray(std::vector<int64_t> value, uint64_t time)
 
 bool NTPublisher::setStringArray(std::vector<std::string> value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::StrArray)
         return false;
 
@@ -255,6 +284,7 @@ bool NTPublisher::setStringArray(std::vector<std::string> value)
 
 bool NTPublisher::setStringArray(std::vector<std::string> value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::StrArray)
         return false;
 
@@ -264,6 +294,7 @@ bool NTPublisher::setStringArray(std::vector<std::string> value, uint64_t time)
 
 bool NTPublisher::setRaw(std::vector<uint8_t> value)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Bin)
         return false;
 
@@ -273,6 +304,7 @@ bool NTPublisher::setRaw(std::vector<uint8_t> value)
 
 bool NTPublisher::setRaw(std::vector<uint8_t> value, uint64_t time)
 {
+    assert(nt != nullptr);
     if (topic.getType() != NTDataType::Bin)
         return false;
 

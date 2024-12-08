@@ -23,5 +23,7 @@ NTTopic::~NTTopic()
 
 void NTTopic::setProperties(NetworkTableInstance::TopicProperties properties)
 {
+    assert(isValid());
+    assert(nt != nullptr);
     this->properties = nt->setProperties(name, properties);
 }

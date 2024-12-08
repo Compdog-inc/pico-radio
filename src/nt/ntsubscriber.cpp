@@ -76,8 +76,13 @@ static bool NT_topicUpdateCallback(
     return true;
 }
 
+NTSubscriber::NTSubscriber() : nt(nullptr), topic(nullptr)
+{
+}
+
 NTSubscriber::NTSubscriber(NetworkTableInstance *nt, std::string topic) : nt(nt), topic(nt)
 {
+    assert(nt != nullptr);
     if (!NT_topicCallbacks.contains(nt))
     {
         NT_topicCallbacks[nt] = {
@@ -118,12 +123,14 @@ void NTSubscriber::_unassignTopic()
 
 bool NTSubscriber::close()
 {
+    assert(nt != nullptr);
     nt->unsubscribe(subuid);
     return true;
 }
 
 NTDataValue NTSubscriber::get()
 {
+    assert(nt != nullptr);
     auto &updates = NT_topicCallbacks[nt].updates;
     if (!updates.contains(topic.getId()))
     {
@@ -135,6 +142,7 @@ NTDataValue NTSubscriber::get()
 
 bool NTSubscriber::getBoolean(bool defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Bool)
         return defaultValue;
@@ -144,6 +152,7 @@ bool NTSubscriber::getBoolean(bool defaultValue)
 
 double NTSubscriber::getDouble(double defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Float64)
         return defaultValue;
@@ -153,6 +162,7 @@ double NTSubscriber::getDouble(double defaultValue)
 
 float NTSubscriber::getFloat(float defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Float32)
         return defaultValue;
@@ -162,6 +172,7 @@ float NTSubscriber::getFloat(float defaultValue)
 
 int64_t NTSubscriber::getInt(int64_t defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.type != NTDataType::Int)
         return defaultValue;
@@ -171,6 +182,7 @@ int64_t NTSubscriber::getInt(int64_t defaultValue)
 
 uint64_t NTSubscriber::getUInt(uint64_t defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.type != NTDataType::UInt)
         return defaultValue;
@@ -180,6 +192,7 @@ uint64_t NTSubscriber::getUInt(uint64_t defaultValue)
 
 std::string NTSubscriber::getString(std::string defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Str)
         return defaultValue;
@@ -189,6 +202,7 @@ std::string NTSubscriber::getString(std::string defaultValue)
 
 std::vector<bool> NTSubscriber::getBooleanArray(std::vector<bool> defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::BoolArray)
         return defaultValue;
@@ -198,6 +212,7 @@ std::vector<bool> NTSubscriber::getBooleanArray(std::vector<bool> defaultValue)
 
 std::vector<double> NTSubscriber::getDoubleArray(std::vector<double> defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Float64Array)
         return defaultValue;
@@ -207,6 +222,7 @@ std::vector<double> NTSubscriber::getDoubleArray(std::vector<double> defaultValu
 
 std::vector<float> NTSubscriber::getFloatArray(std::vector<float> defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Float32Array)
         return defaultValue;
@@ -216,6 +232,7 @@ std::vector<float> NTSubscriber::getFloatArray(std::vector<float> defaultValue)
 
 std::vector<int64_t> NTSubscriber::getIntArray(std::vector<int64_t> defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::IntArray)
         return defaultValue;
@@ -225,6 +242,7 @@ std::vector<int64_t> NTSubscriber::getIntArray(std::vector<int64_t> defaultValue
 
 std::vector<std::string> NTSubscriber::getStringArray(std::vector<std::string> defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::StrArray)
         return defaultValue;
@@ -234,6 +252,7 @@ std::vector<std::string> NTSubscriber::getStringArray(std::vector<std::string> d
 
 std::vector<uint8_t> NTSubscriber::getRaw(std::vector<uint8_t> defaultValue)
 {
+    assert(nt != nullptr);
     auto value = get();
     if (!value.isValid() || value.getAPIType() != NTDataType::Bin)
         return defaultValue;

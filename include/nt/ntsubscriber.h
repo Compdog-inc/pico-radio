@@ -8,6 +8,7 @@
 class NTSubscriber
 {
 public:
+    NTSubscriber();
     NTSubscriber(NetworkTableInstance *nt, std::string topic);
     ~NTSubscriber();
 

@@ -8,6 +8,7 @@
 class NTPublisher
 {
 public:
+    NTPublisher();
     NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue);
     NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, NetworkTableInstance::TopicProperties properties);
     ~NTPublisher();
