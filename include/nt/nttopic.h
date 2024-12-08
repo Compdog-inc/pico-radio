@@ -7,7 +7,7 @@
 class NTTopic
 {
 public:
-    NTTopic(NetworkTableInstance *nt);
+    NTTopic(NetworkTableInstance *nt, std::string name);
     NTTopic(NetworkTableInstance *nt, const NetworkTableInstance::AnnouncedTopic &announcedTopic);
     ~NTTopic();
 

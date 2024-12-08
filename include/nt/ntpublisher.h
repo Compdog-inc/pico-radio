@@ -10,7 +10,9 @@ class NTPublisher
 public:
     NTPublisher();
     NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue);
+    NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, uint64_t time);
     NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, NetworkTableInstance::TopicProperties properties);
+    NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, uint64_t time, NetworkTableInstance::TopicProperties properties);
     ~NTPublisher();
 
     NTTopic &getTopic() { return topic; }

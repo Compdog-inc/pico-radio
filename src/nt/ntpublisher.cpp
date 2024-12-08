@@ -12,7 +12,7 @@ using namespace std::literals;
 static int32_t NEXT_PUBLISHER_ID = 0;
 
 NTPublisher::NTPublisher() : nt(nullptr),
-                             topic(nullptr)
+                             topic(nullptr, "")
 {
 }
 
@@ -28,6 +28,18 @@ NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValu
     set(defaultValue);
 }
 
+NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, uint64_t time) : nt(nt),
+                                                                                                                 topic(
+                                                                                                                     nt,
+                                                                                                                     nt->publish(
+                                                                                                                         topic,
+                                                                                                                         pubuid = NEXT_PUBLISHER_ID++,
+                                                                                                                         defaultValue.type,
+                                                                                                                         NetworkTableInstance::TopicProperties_DEFAULT))
+{
+    set(defaultValue, time);
+}
+
 NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, NetworkTableInstance::TopicProperties properties) : nt(nt),
                                                                                                                                                     topic(
                                                                                                                                                         nt,
@@ -38,6 +50,18 @@ NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValu
                                                                                                                                                             properties))
 {
     set(defaultValue);
+}
+
+NTPublisher::NTPublisher(NetworkTableInstance *nt, std::string topic, NTDataValue defaultValue, uint64_t time, NetworkTableInstance::TopicProperties properties) : nt(nt),
+                                                                                                                                                                   topic(
+                                                                                                                                                                       nt,
+                                                                                                                                                                       nt->publish(
+                                                                                                                                                                           topic,
+                                                                                                                                                                           pubuid = NEXT_PUBLISHER_ID++,
+                                                                                                                                                                           defaultValue.type,
+                                                                                                                                                                           properties))
+{
+    set(defaultValue, time);
 }
 
 NTPublisher::~NTPublisher()

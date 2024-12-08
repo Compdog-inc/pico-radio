@@ -76,11 +76,11 @@ static bool NT_topicUpdateCallback(
     return true;
 }
 
-NTSubscriber::NTSubscriber() : nt(nullptr), topic(nullptr)
+NTSubscriber::NTSubscriber() : nt(nullptr), topic(nullptr, ""s)
 {
 }
 
-NTSubscriber::NTSubscriber(NetworkTableInstance *nt, std::string topic) : nt(nt), topic(nt)
+NTSubscriber::NTSubscriber(NetworkTableInstance *nt, std::string topic) : nt(nt), topic(nt, topic)
 {
     assert(nt != nullptr);
     if (!NT_topicCallbacks.contains(nt))
@@ -118,7 +118,7 @@ void NTSubscriber::_assignTopic(const NetworkTableInstance::AnnouncedTopic &topi
 
 void NTSubscriber::_unassignTopic()
 {
-    this->topic = NTTopic(nt);
+    this->topic = NTTopic(nt, "");
 }
 
 bool NTSubscriber::close()

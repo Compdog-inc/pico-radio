@@ -95,6 +95,7 @@ add_library(pico-radio STATIC
         src/nt/nttopic.cpp
         src/nt/ntpublisher.cpp
         src/nt/ntsubscriber.cpp
+        src/nt/ntentry.cpp
         )
 
 target_include_directories(pico-radio PRIVATE

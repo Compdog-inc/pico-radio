@@ -9,7 +9,7 @@
 
 using namespace std::literals;
 
-NTTopic::NTTopic(NetworkTableInstance *nt) : nt(nt), name(), id(-1), type(NTDataType::Bool), properties(NetworkTableInstance::TopicProperties_DEFAULT)
+NTTopic::NTTopic(NetworkTableInstance *nt, std::string name) : nt(nt), name(name), id(-1), type(NTDataType::Bool), properties(NetworkTableInstance::TopicProperties_DEFAULT)
 {
 }
 
