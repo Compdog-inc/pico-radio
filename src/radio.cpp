@@ -116,11 +116,13 @@ Radio::Radio()
     ip4_addr_t netmask;
     ip4_addr_t gateway;
 
-    INET_IP_MASKED(&local, 2);
-    IP4_ADDR(&netmask, 255, 255, 255, 0);
-    INET_IP_MASKED(&gateway, 1);
+    INET_IP_MASKED(&local, PICO_RADIO_STATIC_IP_LAST);
+    PICO_RADIO_STATIC_IP_NETMASK_IP4_ADDR(&netmask);
+    INET_IP_MASKED(&gateway, PICO_RADIO_STATIC_IP_GATEWAY);
 
+    cyw43_arch_lwip_begin();
     netif_set_addr(netif_default, &local, &netmask, &gateway);
+    cyw43_arch_lwip_end();
 
     dhcp_server_init(&dhcp_server, &gateway, &netmask);
 
@@ -128,17 +130,62 @@ Radio::Radio()
 
     cyw43_arch_enable_sta_mode();
 
+#ifdef PICO_RADIO_STATIC_IP
+    ip4_addr_t local;
+    ip4_addr_t netmask;
+    ip4_addr_t gateway;
+
+    INET_IP_MASKED(&local, PICO_RADIO_STATIC_IP_LAST);
+    PICO_RADIO_STATIC_IP_NETMASK_IP4_ADDR(&netmask);
+    INET_IP_MASKED(&gateway, PICO_RADIO_STATIC_IP_GATEWAY);
+
+    cyw43_arch_lwip_begin();
+    dhcp_release_and_stop(cyw43_state.netif); // turn off DHCP
+    netif_set_addr(netif_default, &local, &netmask, &gateway);
+    cyw43_arch_lwip_end();
+#endif
+
+    int retryCount = NET_RETRY_COUNT;
+    int connectResult = -1;
+
 #if !PICO_RADIO_OPEN
 
     char censoredPassword[WIFI_PASSWORD.length()];
     memset(censoredPassword, '*', WIFI_PASSWORD.length());
-    printf("[RADIO] Connecting to encrypted wifi '%.*s' / '%.*s'... (30 sec)\n", WIFI_SSID.length(), WIFI_SSID.data(), WIFI_PASSWORD.length(), censoredPassword);
-    int connectResult = wifi_connect_until(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, make_timeout_time_ms(300000));
+
+    while (retryCount > 0 || retryCount == -1)
+    {
+        printf("[RADIO] Connecting to encrypted wifi '%.*s' / '%.*s'... (30 sec)\n", WIFI_SSID.length(), WIFI_SSID.data(), WIFI_PASSWORD.length(), censoredPassword);
+        connectResult = wifi_connect_until(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, make_timeout_time_ms(300000));
+
+        if (connectResult == 0)
+            break;
+
+        printf("[RADIO] Failed to connect: %i\n", connectResult);
+        printf("[RADIO] Retrying in 5 seconds...\n");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        if (retryCount > 0)
+            retryCount--;
+    }
 
 #else
 
-    printf("[RADIO] Connecting to open wifi '%.*s'... (30 sec)\n", WIFI_SSID.length(), WIFI_SSID.data());
-    int connectResult = wifi_connect_until(WIFI_SSID, ""sv, CYW43_AUTH_OPEN, make_timeout_time_ms(300000));
+    while (retryCount > 0 || retryCount == -1)
+    {
+        printf("[RADIO] Connecting to open wifi '%.*s'... (30 sec)\n", WIFI_SSID.length(), WIFI_SSID.data());
+        connectResult = wifi_connect_until(WIFI_SSID, ""sv, CYW43_AUTH_OPEN, make_timeout_time_ms(300000));
+
+        if (connectResult == 0)
+            break;
+
+        printf("[RADIO] Failed to connect: %i\n", connectResult);
+        printf("[RADIO] Retrying in 5 seconds...\n");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        if (retryCount > 0)
+            retryCount--;
+    }
 
 #endif
 

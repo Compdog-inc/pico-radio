@@ -28,6 +28,7 @@ if(NOT PICO_RADIO_AP)
         set(PICO_RADIO_AP 0)
 else()
         set(PICO_RADIO_AP 1)
+        set(PICO_RADIO_STATIC_IP 1)
 endif()
 
 if(NOT PICO_RADIO_HOSTNAME)
@@ -42,6 +43,28 @@ if(NOT PICO_RADIO_PASSWORD)
         set(PICO_RADIO_OPEN 1)
 else()
         set(PICO_RADIO_OPEN 0)
+endif()
+
+if(NOT PICO_RADIO_RETRY_COUNT)
+        set(PICO_RADIO_RETRY_COUNT 5)
+endif()
+
+if(NOT PICO_RADIO_STATIC_IP)
+        set(PICO_RADIO_STATIC_IP 0)
+else()
+        set(PICO_RADIO_STATIC_IP 1)
+
+        if(NOT PICO_RADIO_STATIC_IP_LAST)
+                set(PICO_RADIO_STATIC_IP_LAST 2)
+        endif()
+
+        if(NOT PICO_RADIO_STATIC_IP_NETMASK)
+                set(PICO_RADIO_STATIC_IP_NETMASK 255,255,255,0)
+        endif()
+
+        if(NOT PICO_RADIO_STATIC_IP_GATEWAY)
+                set(PICO_RADIO_STATIC_IP_GATEWAY 1)
+        endif()
 endif()
 
 if(NOT WEBSOCKET_THREAD_STACK_SIZE)
@@ -66,6 +89,14 @@ else()
         else()
                 message("Flashing radio with encrypted wifi '${PICO_RADIO_SSID}' / '${PICO_RADIO_PASSWORD}' in STA mode.")
         endif()
+endif()
+
+if(PICO_RADIO_STATIC_IP)
+        string(REPLACE "," "." PICO_RADIO_IP_MASKED_PRINTED ${PICO_RADIO_IP_MASKED})
+        string(REPLACE "," "." PICO_RADIO_STATIC_IP_NETMASK_PRINTED ${PICO_RADIO_STATIC_IP_NETMASK})
+        message("Flashing radio with static IP '${PICO_RADIO_IP_MASKED_PRINTED}.${PICO_RADIO_STATIC_IP_LAST}' / Netmask '${PICO_RADIO_STATIC_IP_NETMASK_PRINTED}' / Gateway '${PICO_RADIO_IP_MASKED_PRINTED}.${PICO_RADIO_STATIC_IP_GATEWAY}'.")
+else()
+        message("Flashing radio with DHCP.")
 endif()
 
 # Initialize the SDK
