@@ -42,6 +42,11 @@ public:
     /// @brief Close all connections and free resources
     ~WsServer();
 
+    /// @brief Set the HTTP response sent to the client when the request is not a valid WebSocket request
+    void setBadRequestResponse(std::string_view response);
+    /// @brief Get the HTTP response sent to the client when the request is not a valid WebSocket request
+    std::string_view getBadRequestResponse();
+
     /// @brief Start listening on the target port
     void start();
     /// @brief Stop the server
@@ -134,6 +139,8 @@ private:
     TaskHandle_t dispatchQueueTask;
     /// @brief True when the dispatch queue is running
     bool dispatchQueueRunning;
+    /// @brief The HTTP response sent to the client when the request is not a valid WebSocket request
+    std::string badRequestResponse;
 
     enum class DispatchQueueElementType
     {

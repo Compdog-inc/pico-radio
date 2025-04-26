@@ -507,6 +507,7 @@ void NTDataValue::assign(const NTDataValue &other)
 
 static constexpr int NT4_SERVER_PORT = 5810;
 static constexpr std::string_view NT_PROTOCOL = "v4.1.networktables.first.wpi.edu"sv;
+static constexpr std::string_view NT_RTT_PROTOCOL = "rtt.networktables.first.wpi.edu"sv;
 
 static constexpr TickType_t MUTEX_TIMEOUT = 1000;
 
@@ -539,6 +540,7 @@ void NetworkTableInstance::startServer()
         return;
     serverTimeOffset = 0;
     server = new WsServer(NT4_SERVER_PORT);
+    server->setBadRequestResponse("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 118\r\n\r\n<html><head><title>NetworkTables</title></head><body><p>WebSockets must be used to access NetworkTables.</body></html>"sv);
     server->callbackArgs = this;
     thisClient = {
         .guid = Guid(),
@@ -549,17 +551,24 @@ void NetworkTableInstance::startServer()
     this->topics = {};
     this->clients = {{thisClient.guid, &thisClient}};
 
-    // Accept NT_PROTOCOL only
+    // Accept NT_PROTOCOL or NT_RTT_PROTOCOL only
     server->protocolCallback = [](const std::vector<std::string> &requestedProtocols, void *args) -> std::string_view
     {
         if (std::find(requestedProtocols.begin(), requestedProtocols.end(), NT_PROTOCOL) != requestedProtocols.end())
             return NT_PROTOCOL;
+        else if (std::find(requestedProtocols.begin(), requestedProtocols.end(), NT_RTT_PROTOCOL) != requestedProtocols.end())
+            return NT_RTT_PROTOCOL;
         else
             return ""sv;
     };
 
     server->clientConnected.Add([](WsServer *server, const WsServer::ClientEntry *entry, void *args)
-                                { NetworkTableInstance *inst = (NetworkTableInstance *)args; 
+                                { NetworkTableInstance *inst = (NetworkTableInstance *)args;
+
+                                // RTT clients are not actual clients
+                                if(entry->ws->serverProtocol == NT_RTT_PROTOCOL)
+                                    return;
+
                                 ClientData* data = new ClientData();
                                 data->guid = entry->guid;
                                 std::size_t nameStart = entry->requestedPath.find("/nt/"sv) + 4;
@@ -593,17 +602,21 @@ void NetworkTableInstance::startServer()
                                        
                                         if (!xSemaphoreTake(inst->stateMutex, MUTEX_TIMEOUT))
                                             return;
-                                    
-                                       ClientData *data = inst->clients[guid];
-                                       inst->clients.erase(guid);
-                                       for (auto o : data->subscriptions)
-                                           delete o.second;
-                                       for (auto o : data->publishers)
-                                           delete o.second;
-                                       delete data;
-                                       inst->updateClientsMetaTopic();
-                                       inst->flushBinary();
-                                       xSemaphoreGive(inst->stateMutex); });
+
+                                        auto search = inst->clients.find(guid);
+                                        if(search == inst->clients.end())
+                                            return;
+
+                                        ClientData *data = search->second;
+                                        inst->clients.erase(guid);
+                                        for (auto o : data->subscriptions)
+                                            delete o.second;
+                                        for (auto o : data->publishers)
+                                            delete o.second;
+                                        delete data;
+                                        inst->updateClientsMetaTopic();
+                                        inst->flushBinary();
+                                        xSemaphoreGive(inst->stateMutex); });
 
     server->messageReceived.Add([](WsServer *server, const Guid &guid, const WebSocketFrame &frame, void *args)
                                 {
@@ -636,6 +649,9 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
     case WebSocketOpCode::TextFrame:
     {
         printf("%.*s\n", frame.payloadLength, frame.payload);
+
+        if (clients.find(guid) == clients.end())
+            break;
 
         std::vector<std::string> topics{};
 
@@ -1031,7 +1047,12 @@ void NetworkTableInstance::_handleFrame(const Guid &guid, const WebSocketFrame &
                     {
                         if (!xSemaphoreTake(stateMutex, MUTEX_TIMEOUT))
                             return;
-                        auto client = clients[guid];
+
+                        auto search = clients.find(guid);
+                        if (search == clients.end())
+                            break;
+
+                        auto client = search->second;
                         auto publisher = client->publishers[id];
                         if (publisher != nullptr)
                         {

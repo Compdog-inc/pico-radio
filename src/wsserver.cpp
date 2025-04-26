@@ -31,7 +31,7 @@ WsServer::ClientEntry::ClientEntry(Guid guid, WebSocket *ws, std::string request
 {
 }
 
-WsServer::WsServer(int port) : clients(), port(port), dispatchQueueRunning(false), dispatchQueue()
+WsServer::WsServer(int port) : clients(), port(port), dispatchQueueRunning(false), badRequestResponse("HTTP/1.1 400 Bad Request\r\n\r\n"sv), dispatchQueue()
 {
     clients.reserve(WS_SERVER_MAX_CLIENT_COUNT);
 
@@ -51,6 +51,16 @@ WsServer::~WsServer()
 
     listener->stop();
     delete listener;
+}
+
+void WsServer::setBadRequestResponse(std::string_view response)
+{
+    badRequestResponse = response;
+}
+
+std::string_view WsServer::getBadRequestResponse()
+{
+    return badRequestResponse;
 }
 
 struct _handleRawConnection_taskargs
@@ -174,7 +184,7 @@ void WsServer::handleRawConnection(TcpClient *client)
 
     if (!foundConnectionHeader || !foundUpgradeHeader || clientKey.empty() || clients.size() == WS_SERVER_MAX_CLIENT_COUNT /* at capacity */)
     {
-        stream->writeString("HTTP/1.1 400 Bad Request\r\n\r\n"sv);
+        stream->writeString(badRequestResponse);
         delete stream;
     }
     else
