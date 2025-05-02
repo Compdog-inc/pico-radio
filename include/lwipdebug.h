@@ -1,0 +1,4 @@
+namespace LWIP
+{
+    void PrintLwipTcpPcbStatus();
+}

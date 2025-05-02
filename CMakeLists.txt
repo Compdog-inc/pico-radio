@@ -122,6 +122,7 @@ add_library(pico-radio STATIC
         src/guid.cpp
         src/websocket.cpp
         src/wsserver.cpp
+        src/lwipdebug.cpp
         src/nt/ntinstance.cpp
         src/nt/nttopic.cpp
         src/nt/ntpublisher.cpp
